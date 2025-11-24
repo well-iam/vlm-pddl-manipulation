@@ -1,6 +1,6 @@
-from tesi_gemini_robotics.coppeliasim_setup import connect_to_sim
-from tesi_gemini_robotics.robot_controller import RobotController
-from tesi_gemini_robotics.llm_interface import GeminiClient
+from tesi_gemini_robotics.implementations.coppelia.coppeliasim_setup import connect_to_sim
+from tesi_gemini_robotics.implementations.coppelia.robot_controller import RobotController
+from tesi_gemini_robotics.core.llm_interface import GeminiClient
 
 # --- 2. FUNZIONI DI CONTROLLO E MOVIMENTO ---
 

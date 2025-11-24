@@ -1,4 +1,4 @@
-from tesi_gemini_robotics.coppeliasim_setup import *
+from tesi_gemini_robotics.implementations.coppelia.coppeliasim_setup import *
 from tesi_gemini_robotics.robot_skills import perform_pick_and_hold
 
 

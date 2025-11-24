@@ -1,13 +1,11 @@
 import logging
 import json
-from tesi_gemini_robotics.utils import get_world_state_data
 
 logger = logging.getLogger(__name__)
 
 class TaskExecutor:
 
-    def __init__(self, sim, gemini_planner, robot, max_steps=10):
-        self.sim = sim
+    def __init__(self, gemini_planner, robot, max_steps=10):
         self.gemini_planner = gemini_planner
         self.robot = robot
         self.max_steps = max_steps # Limite di sicurezza per evitare loop infiniti in execute_autonomous_task
@@ -17,29 +15,30 @@ class TaskExecutor:
         self.current_plan = []
         self.world_state = None
 
-    def execute(self, goal, identified_objects_handles, strategy="planning"):
+    def execute(self, goal, strategy="planning"):
         """
         Metodo unificato per lanciare il task con la strategia scelta.
         """
         if strategy == "reactive":
             logger.info("Avvio esecuzione in modalità REATTIVA (Inner Monologue)...")
-            return self.execute_task_step_by_step(goal, identified_objects_handles)
+            return self.execute_task_step_by_step(goal)
 
         elif strategy == "planning":
             logger.info("Avvio esecuzione in modalità PIANIFICAZIONE (Plan-and-Execute)...")
-            return self.execute_plan(goal, identified_objects_handles)
+            return self.execute_plan(goal)
 
         else:
             raise ValueError(f"Strategia '{strategy}' non supportata.")
 
-    def _update_perception(self, identified_objects_handles):
+    def _update_perception(self):
         """
         Metodo interno per aggiornare la percezione e salvare lo stato.
         Restituisce la stringa JSON pronta per il prompt.
         """
+        self.robot.perception.perceive_scene(self.gemini_planner, use_vision=False)
         # 1. Ottieni il dizionario (lo salviamo per uso interno)
         # Nota: get_world_state_data restituisce un DIZIONARIO, non una stringa
-        self.world_state = get_world_state_data(self.sim, self.robot, identified_objects_handles)
+        self.world_state = self.robot.perception.get_world_state_data()
 
         # 2. Converti in JSON (solo per il prompt)
         return json.dumps(self.world_state, indent=2)
@@ -61,36 +60,21 @@ class TaskExecutor:
             logger.info(f"✅ Task completato (ricevuto 'done' dal planner).")
             return True, False
 
-        # # CASO 2: Il modello deve porre una domanda (Ambiguità)
-        # elif skill_nome == "ask_for_clarification":
-        #     domanda_del_robot = argomenti[0] if argomenti else "Non ho capito, puoi specificare?"
-        #     logger.info(f"🤖 ROBOT CHIEDE: {domanda_del_robot}")
-        #
-        #     # Ottieni la risposta dall'utente
-        #     risposta_utente = input("La tua risposta: ")
-        #
-        #     # Il prossimo prompt per Gemini sarà un aggiornamento di stato e la risposta dell'utente
-        #     world_state_dict = get_world_state_data(sim, robot.handles, robot.handles['base'], MAX_ROBOT_REACH)
-        #     world_state_json = json.dumps(world_state_dict, indent=2)
-        #     current_prompt = f"""
-        #             **Feedback Azione Precedente:** Ho chiesto: '{domanda_del_robot}'. L'utente ha risposto: '{risposta_utente}'.
-        #             **Obiettivo Finale:**
-        #             "{high_level_goal}"
-        #
-        #             Genera il JSON per la prossima azione.
-        #             """
-        #     # current_prompt = f"""
-        #     #         **Feedback Azione Precedente:** Ho chiesto: '{domanda_del_robot}'. L'utente ha risposto: '{risposta_utente}'.
-        #     #         **Stato Attuale del Mondo:**
-        #     #         {world_state_json}
-        #     #         **Obiettivo Finale:**
-        #     #         "{high_level_goal}"
-        #     #
-        #     #         Genera il JSON per la prossima azione.
-        #     #         """
+        # CASO 2: Il modello deve porre una domanda (Ambiguità)
+        elif skill_nome == "ask_for_clarification":
+            domanda_del_robot = argomenti[0] if argomenti else "Non ho capito, puoi specificare?"
+            logger.info(f"🤖 ROBOT CHIEDE: {domanda_del_robot}")
+
+            # Ottieni la risposta dall'utente
+            risposta_utente = input("La tua risposta: ")
+
+            self.last_action_feedback = f"""
+                    Ho chiesto: '{domanda_del_robot}'. L'utente ha risposto: '{risposta_utente}'.
+                    """
+            return False, True
 
         # CASO 3: Esecuzione Fisica
-        if skill_nome in robot.available_skills:
+        elif skill_nome in robot.available_skills:
             funzione_da_chiamare = robot.available_skills[skill_nome]
             success_detector = robot.available_detectors[skill_nome]
             try:
@@ -123,12 +107,11 @@ class TaskExecutor:
             self.last_action_feedback = f"Errore di pianificazione: scelta skill '{skill_nome}' inesistente."
             return False, True
 
-    def execute_task_step_by_step(self, high_level_goal, identified_objects_handles):
+    def execute_task_step_by_step(self, high_level_goal):
         """
         Esegue l'INNER LOOP (Monologo Interiore) per un singolo obiettivo.
         """
         print(f"\n======= AVVIO TASK AUTONOMO: '{high_level_goal}' =======")
-        sim = self.sim
         gemini_planner = self.gemini_planner
         robot = self.robot
 
@@ -142,7 +125,7 @@ class TaskExecutor:
             print(f"\n--- Turno {step_counter}/{self.max_steps} ---")
 
             # PERCEZIONE
-            world_state_json = self._update_perception(identified_objects_handles)
+            world_state_json = self._update_perception()
 
             # --- 3. PIANIFICAZIONE (Costruisci prompt di turno) ---
             prompt_di_turno = f"""
@@ -180,7 +163,7 @@ class TaskExecutor:
             print(f"❌ Task fallito: Raggiunto limite massimo di {self.max_steps} passi.")
             return False
 
-    def execute_plan(self, high_level_goal, identified_objects_handles):
+    def execute_plan(self, high_level_goal):
         """
         Esegue un task autonomo:
         1. Pianifica un piano completo.
@@ -188,9 +171,7 @@ class TaskExecutor:
         3. Se un passo fallisce, si ferma e ripianifica.
         """
         logger.info(f"======= AVVIO TASK AUTONOMO: '{high_level_goal}' =======")
-        sim = self.sim
         gemini_client = self.gemini_planner
-        robot = self.robot
 
         # --- STATO DEL CICLO DI ESECUZIONE ---
         self.current_plan = []  # La lista di passi da eseguire
@@ -206,7 +187,7 @@ class TaskExecutor:
                 logger.info("Nessun piano attivo. Generazione di un nuovo piano...")
 
                 # 1a. Percezione
-                world_state_json = self._update_perception(identified_objects_handles)
+                world_state_json = self._update_perception()
 
                 # 1b. Formattazione Prompt
                 # Inizializziamo l'istruzione di sistema con i dati di scena FRESCHI
@@ -241,7 +222,7 @@ class TaskExecutor:
 
                 except Exception as e:
                     logger.error(f"Pianificazione fallita: impossibile parsare il JSON di Gemini. {e}", exc_info=True)
-                    task_in_progress = False  # Esce dal loop
+                    task_completed = True  # Esce dal loop
                     continue
 
             # --- 2. FASE DI ESECUZIONE (esegue il prossimo passo del piano) ---

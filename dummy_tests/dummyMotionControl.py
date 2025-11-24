@@ -1,9 +1,6 @@
-from coppeliasim_zmqremoteapi_client import RemoteAPIClient
-import numpy as np
-import time
-from tesi_gemini_robotics.robot_execution import *
-from tesi_gemini_robotics.coppeliasim_setup import *
-from tesi_gemini_robotics.motion_planning import *
+from tesi_gemini_robotics.implementations.coppelia.components.robot_execution import *
+from tesi_gemini_robotics.implementations.coppelia.coppeliasim_setup import *
+from tesi_gemini_robotics.implementations.coppelia.components.motion_planning import *
 
 '''
 def setup_collections_via_api(sim, robot_name, environment_object_handles):

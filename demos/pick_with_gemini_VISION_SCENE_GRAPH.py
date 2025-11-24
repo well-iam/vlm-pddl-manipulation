@@ -1,6 +1,6 @@
-from tesi_gemini_robotics.coppeliasim_setup import connect_to_sim
-from tesi_gemini_robotics.robot_controller import RobotController
-from tesi_gemini_robotics.llm_interface import GeminiClient
+from tesi_gemini_robotics.implementations.coppelia.coppeliasim_setup import connect_to_sim
+from tesi_gemini_robotics.implementations.coppelia.robot_controller import RobotController
+from tesi_gemini_robotics.core.llm_interface import GeminiClient
 from tesi_gemini_robotics.utils import get_image_of_scene, get_top_level_interactive_objects, get_current_scene_graph_json
 import time
 
