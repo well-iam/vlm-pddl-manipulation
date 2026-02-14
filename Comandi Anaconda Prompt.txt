@@ -1,7 +1,0 @@
-RIMUOVI AMBIENTE: conda env remove --name tesi_env.
-
-CREA AMBIENTE CON Python 3.9: conda create --name tesi_env python=3.9 -y.
-
-ATTIVA L'AMBIENTE: conda activate tesi_env
-
-DISATTIVA L'AMBIENTE: conda deactivate

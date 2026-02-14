@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 class RobotInterface(ABC):
 
     @abstractmethod
-    def perform_pick_and_hold(self, object_name: str) -> bool:
+    def perform_pick(self, object_name: str) -> bool:
         """
         Esegue la sequenza completa di presa:
         pre-grasp -> approach -> close gripper -> attach (sim only) -> lift.

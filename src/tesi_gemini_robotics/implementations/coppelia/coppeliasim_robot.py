@@ -9,34 +9,34 @@ logger = logging.getLogger(__name__)
 
 class CoppeliaSimRobot(RobotInterface):
     """
-    Classe che incapsula la connessione e il controllo di un robot in CoppeliaSim.
+    Class that encapsulates the connection and control of a robot in CoppeliaSim.
 
-    Gestisce gli handle, l'ambiente IK/OMPL e fornisce metodi di alto livello
-    per eseguire le skill del robot (es. pick_and_hold).
+    Manages handles, IK/OMPL environment and provides high-level methods
+    to execute robot skills (e.g., pick).
     """
     def __init__(self, client, sim, simIK, simOMPL, robot_name='Franka'):
         """
-        Inizializza il controller del robot.
+        Initializes the robot controller.
 
         Args:
-            client: Oggetto client ZMQ principale.
-            sim: Oggetto client API 'sim'.
-            simIK: Oggetto client API 'simIK'.
-            simOMPL: Oggetto client API 'simOMPL'.
-            robot_name (str): Nome del robot nella scena CoppeliaSim.
+            client: Main ZMQ client object.
+            sim: 'sim' API client object.
+            simIK: 'simIK' API client object.
+            simOMPL: 'simOMPL' API client object.
+            robot_name (str): Name of the robot in CoppeliaSim scene.
 
         Raises:
-            Exception: Se il setup iniziale fallisce (es. handle non trovati).
+            Exception: If initial setup fails (e.g. handles not found).
         """
 
-        logger.info("--- Inizializzazione RobotController ---")
+        logger.info("--- Initializing RobotController ---")
         self.client, self.sim, self.simIK, self.simOMPL = client, sim, simIK, simOMPL
         self.robot_name = robot_name
 
-        # 1. Recupera Handles della Scena
+        # 1. Retrieve Scene Handles
         self.handles = self._setup_scene_handles()
         if not self.handles:
-            raise RuntimeError("Setup fallito: impossibile recuperare gli handle della scena.")
+            raise RuntimeError("Setup failed: impossible to retrieve scene handles.")
 
         self.perception = CoppeliaPerception(self.sim, self.handles)
         self.planner = CoppeliaPlanner(self.sim, self.simIK, self.simOMPL, self.handles)
@@ -44,169 +44,171 @@ class CoppeliaSimRobot(RobotInterface):
         self.gripper = CoppeliaGripper(self.sim, self.handles)
 
 
-        # Mappa Nomi Skill -> Funzioni Python
-        # Questo dizionario collega il nome che Gemini sceglierà alla funzione da eseguire.
+        # Map Skill Names -> Python Functions
+        # This dictionary links the name Gemini will choose to the function to execute.
         self.available_skills = {
-            "pick_and_hold": self.perform_pick_and_hold,
+            "pick": self.perform_pick,
             "place": self.perform_place,
+            "nudge": self.perform_nudge,
             "done": self.perform_done
         }
         self.available_detectors = {
-            "pick_and_hold": self.pick_and_hold_success_detector,
+            "pick": self.pick_success_detector,
             "place": self.place_success_detector,
+            "nudge": self.nudge_success_detector,
         }
-        logger.debug(f"✅ Skill disponibili per il robot: {list(self.available_skills.keys())}")
-        logger.info("✅ RobotController inizializzato con successo.")
+        logger.debug(f"✅ Available robot skills: {list(self.available_skills.keys())}")
+        logger.info("✅ RobotController initialized successfully.")
 
     def _setup_scene_handles(self):
         """
-        Ottiene e restituisce gli handle per i componenti chiave del robot e della scena
-        in modo robusto, cercando gli oggetti per tipo e gerarchia.
+        Obtains and returns handles for key robot and scene components
+        robustly, searching objects by type and hierarchy.
         """
         sim = self.sim
-        logger.debug("Recupero degli handle degli oggetti nella scena...")
+        logger.debug("Retrieving handles of objects in scene...")
         handles = {}
 
         try:
-            # 1. OTTENERE GLI OGGETTI DI CONTROLLO PRINCIPALI
-            # Questi sono i pochi nomi che è ragionevole mantenere fissi, poiché
-            # rappresentano i modelli principali e gli elementi di controllo.
+            # 1. OBTAIN MAIN CONTROL OBJECTS
+            # These are the few names reasonable to keep fixed, as they
+            # represent main models and control elements.
             handles['base'] = sim.getObject('/Franka')
             handles['fake_base'] = sim.getObject('/FakeFranka')
             handles['gripper'] = sim.getObject('/Franka/FrankaGripper')
             handles['target'] = sim.getObject('/Franka/Franka_target')
-            handles['tip'] = sim.getObject('/Franka/Franka_tip')  # Cerca il punto di connessione (end-effector)
+            handles['tip'] = sim.getObject('/Franka/Franka_tip')  # Search connection point (end-effector)
 
-            # 2. TROVARE I GIUNTI IN MODO DINAMICO (LA PARTE CHIAVE)
-            # Invece di cercare 'joint1', 'joint2', ecc., chiediamo al simulatore di darci
-            # tutti gli oggetti di tipo "giunto" che sono figli del modello Franka.
+            # 2. FIND JOINTS DYNAMICALLY (KEY PART)
+            # Instead of searching 'joint1', 'joint2', etc., we ask simulator to give us
+            # all "joint" type objects that are children of Franka model.
             all_robot_joints = sim.getObjectsInTree(handles['base'], sim.object_joint_type, 0)
 
-            # Giunti del braccio robotico
+            # Robotic arm joints
             joint_names = [
-                f"  - Nome: '{sim.getObjectAlias(h)}', Handle: {h}"
+                f"  - Name: '{sim.getObjectAlias(h)}', Handle: {h}"
                 for h in all_robot_joints
             ]
             joint_list_string = "\n".join(joint_names)
             logger.debug(f"""
-            Trovati {len(all_robot_joints)} oggetti di tipo 'joint' in totale sotto '/Franka':
+            Found {len(all_robot_joints)} 'joint' type objects total under '/Franka':
             {joint_list_string}""")
 
-            # Giunti del gripper
+            # Gripper joints
             gripper_joints_handles = sim.getObjectsInTree(handles['gripper'], sim.object_joint_type, 0)
             arm_joints_handles = [h for h in all_robot_joints if h not in gripper_joints_handles]
 
-            # Giunti del braccio robotico fake
+            # Fake robotic arm joints
             fake_robot_joints = sim.getObjectsInTree(handles['fake_base'], sim.object_joint_type, 0)
 
             handles['arm_joints'] = arm_joints_handles
             handles['gripper_joints'] = gripper_joints_handles
             handles['fake_arm_joints'] = fake_robot_joints
             logger.debug(f"""
-            --- Composizione delle Liste Finali ---
-              Giunti del BRACCIO ({len(handles['arm_joints'])}): {handles['arm_joints']}
+            --- Final Lists Composition ---
+              ARM Joints ({len(handles['arm_joints'])}): {handles['arm_joints']}
             ------------------------------------
             """)
 
-            # 3. OTTENERE LE COLLEZIONI
-            # Lista degli oggetti che compongono il tuo ambiente
+            # 3. OBTAIN COLLECTIONS
+            # List of objects composing your environment
             all_top_level_shape_handles = sim.getObjectsInTree(sim.handle_scene, sim.sceneobject_shape, 2)
             ignore_list = [handles['base'], handles['fake_base']]#, sim.getObject('/Floor')]
             env_objects_handles = [h for h in all_top_level_shape_handles if h not in ignore_list]
             logger.debug(all_top_level_shape_handles)
             logger.debug(env_objects_handles)
 
-            # Chiama la nuova funzione per creare le collezioni
+            # Call new function to create collections
             collection_handles = self._setup_collections_via_api(env_objects_handles)
             if not collection_handles:
-                logger.critical("Impossibile creare le collezioni, termino il programma.")
+                logger.critical("Impossible to create collections, terminating program.")
                 return None
 
-            # Per le collezioni, l'unico modo è usare il loro nome.
+            # For collections, the only way is to use their name.
             handles['robot_collection'] = collection_handles[0]
             handles['fake_robot_collection'] = collection_handles[1]
             handles['environment_collection'] = collection_handles[2]
 
-            # Riepilogo per verifica
-            logger.debug(f"  - Trovato robot: '{sim.getObjectAlias(handles['base'])}'")
-            logger.debug(f"  - Trovati {len(handles['arm_joints'])} giunti del braccio.")
-            logger.debug(f"  - Trovati {len(handles['gripper_joints'])} giunti della pinza.")
-            logger.debug(f"  - Trovato target IK: '{sim.getObjectAlias(handles['target'])}'")
+            # Summary for verification
+            logger.debug(f"  - Found robot: '{sim.getObjectAlias(handles['base'])}'")
+            logger.debug(f"  - Found {len(handles['arm_joints'])} arm joints.")
+            logger.debug(f"  - Found {len(handles['gripper_joints'])} gripper joints.")
+            logger.debug(f"  - Found IK target: '{sim.getObjectAlias(handles['target'])}'")
 
         except Exception as e:
-            logger.exception(f"❌ ERRORE durante il recupero di un handle: ")
+            logger.exception(f"❌ ERROR during handle retrieval: ")
             logger.error(
-                "    Controlla che tutti gli oggetti principali (es. /Franka, /FrankaGripper, /Franka_target, /Cuboid) "
-                "siano presenti e abbiano i nomi corretti nella scena.")
+                "    Check that all main objects (e.g. /Franka, /FrankaGripper, /Franka_target, /Cuboid) "
+                "are present and have correct names in scene.")
             return None
 
-        logger.info("✅ Handle recuperati con successo.")
+        logger.info("✅ Handles retrieved successfully.")
         return handles
 
     #TODO
     def _setup_collections_via_api(self, environment_object_handles):
         """
-        Crea e popola le collezioni 'Robot' e 'Environment' dinamicamente via API.
-        Questo è il metodo moderno e corretto per le versioni recenti di CoppeliaSim.
+        Creates and populates 'Robot' and 'Environment' collections dynamically via API.
+        This is the modern and correct method for recent CoppeliaSim versions.
         """
-        logger.info("Setup dinamico delle collezioni via API...")
+        logger.info("Dynamic collection setup via API...")
 
         sim = self.sim
         robot_name = self.robot_name
         try:
-            # --- 1. CREA LE COLLEZIONI (o le trova se esistono già) ---
+            # --- 1. CREATE COLLECTIONS (or find if exist) ---
             robot_collection_handle = sim.createCollection(0)
-            logger.info("  - Collezione 'Robot' creata dinamicamente.")
+            logger.info("  - 'Robot' collection created dynamically.")
 
             fake_robot_collection_handle = sim.createCollection(0)
 
             env_collection_handle = sim.createCollection(0)
-            logger.info("  - Collezione 'Environment' creata dinamicamente.")
+            logger.info("  - 'Environment' collection created dynamically.")
 
-            # --- 2. POPOLA LA COLLEZIONE 'ROBOT' ---
-            # Aggiungiamo l'intero modello del robot (l'albero gerarchico) alla collezione.
+            # --- 2. POPULATE 'ROBOT' COLLECTION ---
+            # We add entire robot model (hierarchy tree) to collection.
             try:
                 robot_handle = sim.getObject(f'/{robot_name}')
-                # sim.handle_tree dice di includere l'oggetto e tutti i suoi figli.
-                # options=0 significa "aggiungi".
-                # options=2 significa escludi la base dell'albero
+                # sim.handle_tree says include object and all its children.
+                # options=0 means "add".
+                # options=2 means exclude tree base
                 sim.addItemToCollection(robot_collection_handle, sim.handle_tree, robot_handle, 2)
-                logger.info(f"  - Aggiunto l'intero albero del robot '{robot_name}' alla collezione 'Robot'.")
-                logger.debug(f'HANDLES DELLA COLLEZIONE ROBOT: {sim.getCollectionObjects(robot_collection_handle)}')
+                logger.info(f"  - Added entire tree of robot '{robot_name}' to 'Robot' collection.")
+                logger.debug(f'ROBOT COLLECTION HANDLES: {sim.getCollectionObjects(robot_collection_handle)}')
             except Exception as e:
-                logger.exception(f"    - ERRORE: Impossibile trovare o aggiungere il robot '{robot_name}': ")
+                logger.exception(f"    - ERROR: Impossible to find or add robot '{robot_name}': ")
 
             try:
                 fake_robot_handle = sim.getObject('/FakeFranka')
                 sim.addItemToCollection(fake_robot_collection_handle, sim.handle_tree, fake_robot_handle, 2)
-                logger.info(f"  - Aggiunto l'intero albero del robot 'Fake{robot_name}' alla collezione 'FakeRobot'.")
+                logger.info(f"  - Added entire tree of robot 'Fake{robot_name}' to 'FakeRobot' collection.")
                 logger.debug(
-                    f'HANDLES DELLA COLLEZIONE FAKE ROBOT: {sim.getCollectionObjects(fake_robot_collection_handle)}')
+                    f'FAKE ROBOT COLLECTION HANDLES: {sim.getCollectionObjects(fake_robot_collection_handle)}')
             except Exception as e:
-                logger.exception(f"    - ERRORE: Impossibile trovare o aggiungere il robot '{robot_name}': ")
+                logger.exception(f"    - ERROR: Impossible to find or add robot '{robot_name}': ")
 
-            # --- 3. POPOLA LA COLLEZIONE 'ENVIRONMENT' ---
+            # --- 3. POPULATE 'ENVIRONMENT' COLLECTION ---
             for object_handle in environment_object_handles:
                 try:
-                    # sim.handle_single dice di aggiungere solo questo specifico oggetto.
+                    # sim.handle_single says add only this specific object.
                     sim.addItemToCollection(env_collection_handle, sim.handle_single, object_handle, 0)
                 except Exception as e:
                     logger.exception(
-                        f"    - Attenzione: Oggetto environment '{sim.getObjectAlias(object_handle)}' non trovato nella scena.")
+                        f"    - Warning: Environment object '{sim.getObjectAlias(object_handle)}' not found in scene.")
 
             debug_env_collection_handles = sim.getCollectionObjects(env_collection_handle)
             debug_env_collection_names = [sim.getObjectAlias(f'{h}') for h in debug_env_collection_handles]
-            logger.debug(f'NOMI DEGLI OGGETTI DELLA COLLEZIONE ENVIRONMENT: {debug_env_collection_names}')
-            logger.info("✅ Collezioni create e popolate con successo.")
+            logger.debug(f'NAMES OF OBJECTS IN ENVIRONMENT COLLECTION: {debug_env_collection_names}')
+            logger.info("✅ Collections created and populated successfully.")
 
             return [robot_collection_handle, fake_robot_collection_handle, env_collection_handle]
 
         except Exception as e:
-            logger.exception(f"❌ Errore critico durante la gestione delle collezioni: ")
+            logger.exception(f"❌ Critical error during collection management: ")
             return None
 
 
-    def perform_pick_and_hold(self, object_name):
+    def perform_pick(self, object_name):
         client, sim, simIK, simOMPL = self.client, self.sim, self.simIK, self.simOMPL
         handles = self.handles
         planner = self.planner
@@ -216,41 +218,41 @@ class CoppeliaSimRobot(RobotInterface):
         success = False
         object_handle = sim.getObject(f'/{object_name}')
         try:
-            # 1. Posizione di riposo iniziale
+            # 1. Initial rest position
             # home_q = [0, -np.pi / 4, 0, -3 * np.pi / 4, 0, np.pi / 2, np.pi / 4]
             home_q = [sim.getJointPosition(h) for h in handles['arm_joints']]
 
-            # 2. Definizione delle pose target cartesiane relative alla base del robot
-            logger.debug('CALCOLO LE POSE TARGET')
+            # 2. Definition of target Cartesian poses relative to robot base
+            logger.debug('CALCULATING TARGET POSES')
             grasp_pose = self.perception.get_grasp_pose(object_name)
             if not grasp_pose:
-                logger.error("Impossibile calcolare la grasp-pose.")
+                logger.error("Impossible to calculate grasp-pose.")
                 return False
 
-            # PRE-GRASP: 15 cm sopra il bounding box
+            # PRE-GRASP: 15 cm above bounding box
             pre_grasp_pose = list(grasp_pose)
             pre_grasp_pose[11] += 0.15
 
-            # LIFT: Solleva di 20 cm rispetto alla presa
+            # LIFT: Lift 20 cm relative to grasp
             lift_pose = list(grasp_pose)
             lift_pose[11] += 0.20
 
-            # 3. Movimento verso la posa di pre-presa
-            logger.debug('MI MUOVO VERSO LA PRE-PRESA')
+            # 3. Movement towards pre-grasp pose
+            logger.debug('MOVING TOWARDS PRE-GRASP')
             pre_grasp_q = planner.find_valid_ik_solution(pre_grasp_pose)
             if not pre_grasp_q:
-                logger.error("Impossibile calcolare la configurazione di pre-presa.")
+                logger.error("Impossible to calculate pre-grasp configuration.")
                 return False
 
             path_to_pre_grasp = planner.plan_path_rrt(pre_grasp_q)
             if not path_to_pre_grasp:
-                logger.error("Impossibile calcolare il percorso verso la posa di pre-presa.")
+                logger.error("Impossible to calculate path towards pre-grasp pose.")
                 return False
             actuator.execute_path(path_to_pre_grasp)
 
-            # 4. Movimento di avvicinamento finale (lineare, si assume sicuro)
-            logger.debug('MI ABBASSO VERTICALENTE VERSO IL CUBO')
-            # setBoolProperty() SERVE PER FARE IN MODO CHE L'OGGETTO DIVENTI FIGLIO DEL GRIPPER
+            # 4. Final approach movement (linear, assumed safe)
+            logger.debug('LOWERING VERTICALLY TOWARDS CUBE')
+            # setBoolProperty() NEEDED TO MAKE OBJECT BECOME CHILD OF GRIPPER
             # print(sim.getBoolProperty(object_handle, 'dynamic'))
             # print(sim.getBoolProperty(object_handle, 'respondable'))
             sim.setBoolProperty(object_handle, 'dynamic', False, 0)
@@ -258,44 +260,44 @@ class CoppeliaSimRobot(RobotInterface):
 
             path_to_grasp = planner.plan_linear_path(grasp_pose)
             if not path_to_grasp:
-                logger.error("Impossibile calcolare il percorso verso la posa di presa.")
+                logger.error("Impossible to calculate path towards grasp pose.")
                 return False
             actuator.execute_path(path_to_grasp)
             gripper.open()
 
-            # 5. Presa dell'oggetto
+            # 5. Object grasping
             if gripper.detect():
                 gripper.attach_object(object_name)
                 gripper.close()
 
-            # 6. Sollevamento dell'oggetto
+            # 6. Object lifting
             lift_q = planner.find_valid_ik_solution(lift_pose)
             if not lift_q:
-                logger.error("Impossibile calcolare la configurazione di post-presa.")
+                logger.error("Impossible to calculate post-grasp configuration.")
                 return False
             path_to_lift = planner.plan_linear_path(lift_pose)
             if not path_to_grasp:
-                logger.error("Impossibile calcolare il percorso verso la posa di post-presa.")
+                logger.error("Impossible to calculate path towards post-grasp pose.")
                 return False
             actuator.execute_path(path_to_lift)
 
-            # 7. Mantenimento della posizione per 3 secondi
-            logger.debug("Mantenimento dell'oggetto in posizione...")
-            # for _ in range(60):  # 60 passi * 50ms/passo = 3 secondi
+            # 7. Holding position for 3 seconds
+            logger.debug("Holding object in position...")
+            # for _ in range(60):  # 60 steps * 50ms/step = 3 seconds
             #     client.step()
             # time.sleep(3)
 
-            # 8. Ritorno alla posizione di riposo
+            # 8. Return to rest position
             path_to_home = planner.plan_path_rrt(home_q)
-            if not path_to_grasp:
-                logger.error("Impossibile calcolare il percorso verso la posa di Home.")
+            if not path_to_home:
+                logger.error("Impossible to calculate path towards Home pose.")
                 return False
             actuator.execute_path(path_to_home)
             success = True
 
         finally:
             if not success:
-                logger.debug("Stato dell'oggetto resettato su 'dynamic'")
+                logger.debug("Object state reset to 'dynamic'")
                 sim.setBoolProperty(object_handle, 'dynamic', True, 0)
 
         return success
@@ -307,23 +309,23 @@ class CoppeliaSimRobot(RobotInterface):
         actuator = self.actuator
         gripper = self.gripper
 
-        # 1. Posizione di riposo iniziale
+        # 1. Initial rest position
         home_q = [sim.getJointPosition(h) for h in handles['arm_joints']]
 
-        # 2. Definizione delle pose target cartesiane relative alla base del robot
+        # 2. Definition of target Cartesian poses relative to robot base
         place_pose, obj_height = self.perception.get_place_pose(object_name, target_name)
         if not place_pose:
-            logger.error("Impossibile calcolare la posa di place.")
+            logger.error("Impossible to calculate place pose.")
             return False
 
-        # 2. STRATEGIA DI MOVIMENTO (Calcolo pose relative)
-        # Qui applichiamo la logica di sicurezza che volevi gestire nel chiamante
+        # 2. MOVEMENT STRATEGY (Relative poses calculation)
+        # Here we apply safety logic you wanted to manage in caller
 
-        # Pre-Place: 10 cm + mezza altezza oggetto sopra la destinazione
+        # Pre-Place: 10 cm + half object height above destination
         pre_place_pose = list(place_pose)
         pre_place_pose[11] += (obj_height / 2.0) + 0.10
 
-        # Post-Place (Lift): Risalita di sicurezza (es. 20 cm sopra)
+        # Post-Place (Lift): Safety rise (e.g. 20 cm above)
         lift_pose = list(place_pose)
         lift_pose[11] += 0.20
 
@@ -331,61 +333,123 @@ class CoppeliaSimRobot(RobotInterface):
         logger.debug(f"PRE_PLACE_POSE: {pre_place_pose}")
         logger.debug(f"LIFT_POSE: {lift_pose}")
 
-        # 3. Movimento verso la posa di pre-presa
-        logger.debug('MI MUOVO VERSO LA PRE-PLACE')
+        # 3. Movement towards pre-grasp pose
+        logger.debug('MOVING TOWARDS PRE-PLACE')
         pre_place_q = motion.find_valid_ik_solution(pre_place_pose)
         if not pre_place_q:
-            logger.error("Impossibile calcolare la configurazione di pre-place.")
+            logger.error("Impossible to calculate pre-place configuration.")
             return False
 
         path_to_pre_place = motion.plan_path_rrt(pre_place_q)
         if not path_to_pre_place:
-            logger.error("Impossibile calcolare il percorso verso la posa di pre-place.")
+            logger.error("Impossible to calculate path towards pre-place pose.")
             return False
         actuator.execute_path(path_to_pre_place)
 
-        # 4. Movimento di avvicinamento finale (lineare, si assume sicuro)
-        logger.debug("MI ABBASSO VERTICALENTE PER POSARE L'OGGETTO")
+        # 4. Final approach movement (linear, assumed safe)
+        logger.debug("LOWERING VERTICALLY TO PLACE OBJECT")
         path_to_place = motion.plan_linear_path(place_pose)
         if not path_to_place:
-            logger.error("Impossibile calcolare il percorso verso la posa di place.")
+            logger.error("Impossible to calculate path towards place pose.")
             return False
         actuator.execute_path(path_to_place)
 
-        # 5. Rilascio dell'oggetto
+        # 5. Object release
         gripper.open()
         gripper.detach_object(object_name)
         # time.sleep(0.01)
 
-        # 6. Ritorno
-        logger.debug('MI SOLLEVO')
+        # 6. Return
+        logger.debug('LIFTING')
         lift_q = motion.find_valid_ik_solution(lift_pose)
         if not lift_q:
-            logger.error("Impossibile calcolare la configurazione di lift.")
+            logger.error("Impossible to calculate lift configuration.")
             return False
 
         path_to_lift = motion.plan_linear_path(lift_pose)
         if not path_to_lift:
-            logger.error("Impossibile calcolare il percorso verso la posa di lift.")
+            logger.error("Impossible to calculate path towards lift pose.")
             return False
         actuator.execute_path(path_to_lift)
 
-        # 7. Ritorno alla posizione di riposo
-        logger.debug("RITORNO ALLA POSIZIONE INIZIALE...")
+        # 7. Return to rest position
+        logger.debug("RETURNING TO INITIAL POSITION...")
         path_to_home = motion.plan_path_rrt(home_q)
         if not path_to_home:
-            logger.error("Impossibile calcolare il percorso verso la posa di Home.")
+            logger.error("Impossible to calculate path towards Home pose.")
+            return False
+        actuator.execute_path(path_to_home)
+
+        return True
+
+    def perform_nudge(self, object_name):
+        client, sim, simIK, simOMPL = self.client, self.sim, self.simIK, self.simOMPL
+        handles = self.handles
+        planner = self.planner
+        actuator = self.actuator
+
+        # 1. Initial rest position
+        home_q = [sim.getJointPosition(h) for h in handles['arm_joints']]
+
+        # 2. Definition of target Cartesian poses relative to robot base
+        logger.debug('CALCULATING TARGET POSES')
+        nudge_pose = self.perception.get_nudge_pose(object_name)
+        if not nudge_pose:
+            logger.error("Impossible to calculate nudge-pose.")
+            return False
+
+        # PRE-GRASP: 15 cm above bounding box
+        pre_nudge_pose = list(nudge_pose)
+        pre_nudge_pose[3] += 0.15
+
+        # # LIFT: Lift 20 cm relative to grasp
+        # lift_pose = list(nudge_pose)
+        # lift_pose[11] += 0.20
+
+        # 3. Movement towards pre-nudge pose
+        logger.debug('MOVING TOWARDS PRE-NUDGE')
+        pre_nudge_q = planner.find_valid_ik_solution(pre_nudge_pose)
+        if not pre_nudge_q:
+            logger.error("Impossible to calculate pre-nudge configuration.")
+            return False
+
+        path_to_pre_nudge = planner.plan_path_rrt(pre_nudge_q)
+        if not path_to_pre_nudge:
+            logger.error("Impossible to calculate path towards pre-grasp pose.")
+            return False
+        actuator.execute_path(path_to_pre_nudge)
+
+        path_to_nudge = planner.plan_linear_path(nudge_pose)
+        if not path_to_nudge:
+            logger.error("Impossible to calculate path towards grasp pose.")
+            return False
+        actuator.execute_path(path_to_nudge)
+
+        # 7. Holding position for 3 seconds
+        logger.debug("Holding object in position...")
+        # for _ in range(60):  # 60 steps * 50ms/step = 3 seconds
+        #     client.step()
+        # time.sleep(3)
+
+        # 8. Return to rest position
+        path_to_home = planner.plan_path_rrt(home_q)
+        if not path_to_home:
+            logger.error("Impossible to calculate path towards Home pose.")
             return False
         actuator.execute_path(path_to_home)
 
         return True
 
     def perform_done(self):
-        print("🤖 FAKE_ESEGUO: done (compito terminato)")
+        print("🤖 FAKE_EXECUTE: done (task finished)")
         return True
 
-    def pick_and_hold_success_detector(self, object_name):
-        return self.perception.pick_and_hold_success_detector(object_name)
+    def pick_success_detector(self, object_name):
+        return self.perception.pick_success_detector(object_name)
 
     def place_success_detector(self, object_name, target_name):
         return self.perception.place_success_detector(object_name, target_name)
+
+    def nudge_success_detector(self, object_name):
+        print("🤖 FAKE_EXECUTE: nudge (task finished)")
+        return True, "True"

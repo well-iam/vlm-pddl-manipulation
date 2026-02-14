@@ -3,19 +3,17 @@ import logging
 import colorlog
 import sys
 
-
-
 def setup_logging(level=logging.WARNING):
     """
-    Configura il logger principale (root logger) per l'intera applicazione.
-    Va chiamata UNA SOLA VOLTA all'inizio dello script principale (main).
+    Configures the root logger for the entire application.
+    Must be called ONLY ONCE at the beginning of the main script.
     """
     log_colors = {
         'DEBUG': 'white',
         'INFO': 'blue',
         'WARNING': 'yellow',
         'ERROR': 'red',
-        'CRITICAL': 'bold_red,bg_white',  # Esempio: rosso grassetto su sfondo bianco
+        'CRITICAL': 'bold_red,bg_white',  # Example: bold red on white background
     }
 
     # log_format = "%(log_color)s[%(asctime)s][%(name)-25s][%(levelname)-8s] %(message)s"
@@ -26,34 +24,34 @@ def setup_logging(level=logging.WARNING):
         log_format,
         datefmt=date_format,
         log_colors=log_colors,
-        reset=True,  # Resetta il colore dopo ogni messaggio
-        style='%'  # Stile di formattazione (default)
+        reset=True,  # Resets color after each message
+        style='%'  # Formatting style (default)
     )
 
     root_logger = logging.getLogger()
 
-    # Imposta il livello di soglia globale sul logger radice
+    # Set the global threshold level on the root logger
     root_logger.setLevel(level)
 
-    # Rimuovi eventuali handler esistenti per evitare output doppi
+    # Remove existing handlers to avoid double output
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
-    # Crea un handler che invia i log alla console (sys.stdout)
+    # Create a handler that sends logs to console (sys.stdout)
     handler = logging.StreamHandler(sys.stdout)
-    # Assegna il nostro nuovo formatter colorato all'handler
+    # Assign our new colored formatter to the handler
     handler.setFormatter(formatter)
 
-    # Aggiungi il nostro handler configurato al logger radice
+    # Add our configured handler to the root logger
     root_logger.addHandler(handler)
 
-    # SILENZIA I LOGGER ESTERNI RUMOROSI
+    # SILENCE NOISY EXTERNAL LOGGERS
     #
-    # Ora che il nostro logger radice è impostato (es. a DEBUG),
-    # diciamo a logger specifici di essere meno loquaci, impostando
-    # il loro livello a WARNING. Questo nasconderà i loro messaggi
-    # INFO e DEBUG, senza influenzare i nostri.
+    # Now that our root logger is set (e.g., to DEBUG),
+    # we tell specific loggers to be less talkative by setting
+    # their level to WARNING. This will hide their INFO and DEBUG
+    # messages without affecting ours.
 
-    # Lista dei logger da silenziare
+    # List of loggers to silence
     noisy_loggers = [
         "httpx",
         "httpcore",
@@ -66,5 +64,5 @@ def setup_logging(level=logging.WARNING):
     for logger_name in noisy_loggers:
         logging.getLogger(logger_name).setLevel(logging.WARNING)
 
-    # Messaggio di avvio
-    logging.info(f"Logging colorato initializzato a livello: {logging.getLevelName(level)}")
+    # Startup message
+    logging.info(f"Colored logging initialized at level: {logging.getLevelName(level)}")

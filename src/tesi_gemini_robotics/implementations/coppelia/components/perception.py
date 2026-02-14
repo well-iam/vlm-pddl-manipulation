@@ -14,105 +14,105 @@ class CoppeliaPerception:
         self.sim = sim
         self.handles = handles
         self.vision_sensor_handle = sim.getObject('/visionSensor')
-        # Counter delle immagini scattate
+        # Counter of taken images
         self.no_images = 0
-        # STATO INTERNO
-        # Dizionario {nome_oggetto: handle} di TUTTO ciò che esiste nella scena
+        # INTERNAL STATE
+        # Dictionary {object_name: handle} of EVERYTHING existing in the scene
         self.ground_truth_objects = self._scan_groud_truth_objects(['Floor', 'Franka', 'FakeFranka', 'Blue_Wall'])
-        # Lista [nomi_oggetti] di ciò che è stato RILEVATO nell'ultimo scan
+        # List [object_names] of what was DETECTED in the last scan
         self.identified_objects_names = []
 
     def _scan_groud_truth_objects(self, ignore_list=None):
         """
 
-        Interroga la scena di CoppeliaSim per identificare tutti gli oggetti
-        di primo livello (figli diretti della scena).
+        Queries the CoppeliaSim scene to identify all top-level objects
+        (direct children of the scene).
 
-        Questo metodo utilizza l'approccio corretto e più efficiente, sfruttando
-        il parametro 'options' della funzione sim.getObjectsInTree per delegare
-        il filtraggio gerarchico al motore di simulazione.
+        This method uses the correct and most efficient approach, leveraging
+        the 'options' parameter of sim.getObjectsInTree function to delegate
+        hierarchical filtering to the simulation engine.
 
-        :return: Una lista di stringhe contenente i nomi degli oggetti che
-                 soddisfano tutti i criteri.
+        :return: A list of strings containing names of objects satisfying
+                 all criteria.
         """
-        logger.debug("Recupero degli oggetti interattivi di primo livello (Metodo Ottimizzato)...")
+        logger.debug("Retrieving interactive top-level objects (Optimized Method)...")
         sim = self.sim
-        # --- LA LOGICA CORRETTA BASATA SULLA RICERCA DOCUMENTALE ---
+        # --- CORRECT LOGIC BASED ON DOCUMENTATION RESEARCH ---
 
-        # 1. Ottiene gli handle di TUTTI gli oggetti di primo livello nella scena.
-        #    - treeBaseHandle = sim.handle_scene: La ricerca parte dalla radice della scena.
-        #    - objectType = sim.handle_all: La ricerca è generalizzata a qualsiasi
-        #      tipo di oggetto per massima robustezza (non solo 'shape').
-        #    - options = 2: QUESTA È LA CHIAVE. Il valore 2 (bit 1 impostato)
-        #      istruisce la funzione a restituire SOLO i figli diretti della radice,
-        #      escludendo tutti i sotto-oggetti in gerarchie più profonde.
+        # 1. Get handles of ALL top-level objects in the scene.
+        #    - treeBaseHandle = sim.handle_scene: Search starts from scene root.
+        #    - objectType = sim.handle_all: Search is generalized to any
+        #      object type for maximum robustness (not just 'shape').
+        #    - options = 2: THIS IS THE KEY. Value 2 (bit 1 set)
+        #      instructs the function to return ONLY direct children of root,
+        #      excluding all sub-objects in deeper hierarchies.
         all_top_level_objects = sim.getObjectsInTree(sim.handle_scene, sim.sceneobject_shape, 2)  # sim.handle_all
-        logger.debug(f"Trovati {len(all_top_level_objects)} oggetti totali di primo livello nella scena.")
+        logger.debug(f"Found {len(all_top_level_objects)} total top-level objects in the scene.")
 
         # ----------------------------------------------------------------
 
         ground_truth_objects = {}
         for handle in all_top_level_objects:
             try:
-                # Recupera il nome più user-friendly: l'alias se esiste, altrimenti il nome dell'oggetto.
-                # Questa è una best practice per l'identificazione degli oggetti.[4]
+                # Retrieve friendlier name: alias if exists, otherwise object name.
+                # This is a best practice for object identification.[4]
                 name = sim.getObjectAlias(handle)
                 if name in ignore_list:
                     continue
                 ground_truth_objects[name] = handle
 
             except Exception:
-                logger.exception(f"\n  --> ⚠️ ERRORE o oggetto non pertinente {handle}: ")
+                logger.exception(f"\n  --> ⚠️ ERROR or irrelevant object {handle}: ")
 
         logger.info(
-            f"Ground Truth aggiornata: {len(ground_truth_objects)} oggetti noti ({list(ground_truth_objects.keys())})")
+            f"Ground Truth updated: {len(ground_truth_objects)} known objects ({list(ground_truth_objects.keys())})")
         return ground_truth_objects
 
     def perceive_scene(self, gemini_client=None, use_vision=True):
         """
-        Esegue il ciclo di percezione completo:
-        1. Scatta foto.
-        2. (Opzionale) Chiede a Gemini cosa vede.
-        3. (Fallback) Usa la Ground Truth se la visione è disabilitata o fallisce.
+        Executes the complete perception cycle:
+        1. Takes photo.
+        2. (Optional) Asks Gemini what it sees.
+        3. (Fallback) Uses Ground Truth if vision is disabled or fails.
 
-        Popola self.identified_objects_names.
+        Populates self.identified_objects_names.
         """
-        # 1. Acquisisci immagine (sempre utile per il log o per Gemini)
+        # 1. Acquire image (always useful for log or Gemini)
         image = self.get_camera_image()
 
         if use_vision and gemini_client:
-            logger.info("Avvio percezione visiva con Gemini...")
-            # Passiamo a Gemini la lista dei nomi noti per aiutare il riconoscimento (Closed-Set Recognition)
+            logger.info("Starting visual perception with Gemini...")
+            # Pass known names list to Gemini to aid recognition (Closed-Set Recognition)
             known_names = list(self.ground_truth_objects.keys())
 
-            # Chiamata a Gemini (assumendo che GeminiClient abbia questo metodo)
+            # Call Gemini (assuming GeminiClient has this method)
             detected_names = gemini_client.get_object_list_from_image(image, known_names)
 
             if detected_names:
-                # Filtra: Accetta solo nomi che esistono davvero nella Ground Truth (Anti-Allucinazione)
+                # Filter: Accept only names that actually exist in Ground Truth (Anti-Hallucination)
                 valid_detections = [name for name in detected_names if name in self.ground_truth_objects]
                 self.identified_objects_names = valid_detections
-                logger.info(f"Gemini ha visto: {self.identified_objects_names}")
+                logger.info(f"Gemini saw: {self.identified_objects_names}")
             else:
-                logger.warning("Gemini non ha rilevato oggetti. Uso Ground Truth come fallback.")
+                logger.warning("Gemini detected no objects. Using Ground Truth as fallback.")
                 self.identified_objects_names = list(self.ground_truth_objects.keys())
 
         else:
-            # Modalità "Cieca" o "Debug": Il robot "vede" tutto ciò che esiste (Oracle)
-            logger.debug("Percezione visiva saltata. Uso Ground Truth (Oracle Mode).")
+            # "Blind" or "Debug" mode: Robot "sees" everything that exists (Oracle)
+            logger.debug("Visual perception skipped. Using Ground Truth (Oracle Mode).")
             self.identified_objects_names = list(self.ground_truth_objects.keys())
 
         return self.identified_objects_names
 
     def _scan_scene_and_robot_state(self, objects_handles):
         """
-        Costruisce un dizionario completo dello stato del mondo, includendo
-        lo stato del robot (cosa tiene) e lo stato dell'ambiente.
+        Builds a complete world state dictionary, including
+        robot state (what it is holding) and environment state.
         """
         robot_base = self.handles['base']
         gripper_tip = self.handles['tip']
 
-        # Struttura dati finale
+        # Final data structure
         world_state = {
             "robot_state": {"is_holding": "libero"},
             "environment_objects": {
@@ -121,65 +121,65 @@ class CoppeliaPerception:
             }
         }
 
-        # Cache locale per evitare ri-calcoli
+        # Local cache to avoid re-calculations
         # Format: {handle: {'name': str, 'pos': [x,y,z], 'is_dynamic': bool}}
         objects_cache = {}
 
-        # 1. PRIMO PASSAGGIO: Raccolta dati e check "is_holding"
-        # Identifichiamo subito se stiamo tenendo qualcosa per escluderlo dalla logica "poggiato su"
+        # 1. FIRST PASS: Data collection and "is_holding" check
+        # Identify immediately if holding something to exclude it from "resting on" logic
         held_object_handle = None
 
         for object_handle in objects_handles:
-            # Ottieni alias
+            # Get alias
             name = self.sim.getObjectAlias(object_handle)
 
-            # Ottieni proprietà fisiche
+            # Get physical properties
             is_dynamic = self.sim.getBoolProperty(object_handle, 'dynamic')
             is_respondable = self.sim.getBoolProperty(object_handle, 'respondable')
 
-            # Ottieni posizione assoluta per calcoli veloci
+            # Get absolute position for fast calculations
             pos = self.sim.getObjectPosition(object_handle, -1)
 
-            # Check se è tenuto dal robot (gerarchia)
+            # Check if held by robot (hierarchy)
             parent = self.sim.getObjectParent(object_handle)
             if parent == gripper_tip:
                 world_state["robot_state"]["is_holding"] = name
-                # Non aggiungiamo l'oggetto alla cache per i calcoli spaziali ambientali
+                # Do not add object to cache for environmental spatial calculations
                 continue
 
             objects_cache[object_handle] = {
                 'name': name,
                 'pos': pos,
-                'is_manipulable': is_dynamic and is_respondable  # o la tua logica combinata
+                'is_manipulable': is_dynamic and is_respondable  # or your combined logic
             }
 
-        # 2. SECONDO PASSAGGIO: Costruzione Scene Graph e Relazioni
+        # 2. SECOND PASS: Build Scene Graph and Relations
         for object_handle, data in objects_cache.items():
-            # Calcola distanza dal robot (usando la posizione relativa alla base per precisione o assoluta per stima)
+            # Calculate distance from robot (using position relative to base for precision or absolute for estimate)
             dist_from_robot = self.dist(object_handle, robot_base)
             is_reachable = dist_from_robot <= MAX_FRANKA_REACH
 
             obj_info = {
-                "nome": data['name'],
-                # "posizione_3D": [round(p, 3) for p in position],
-                "distanza_dal_robot_m": round(dist_from_robot, 3) if dist_from_robot is not None else "N/A",
-                "raggiungibile": is_reachable
+                "name": data['name'],
+                # "3D_position": [round(p, 3) for p in position],
+                "distance_from_robot_m": round(dist_from_robot, 3) if dist_from_robot is not None else "N/A",
+                "reachable": is_reachable
             }
 
             if data['is_manipulable']:
-                # Calcola "poggiato_su" solo per oggetti manipolabili
-                poggiato_su = self._poggiato_su_GEMINI(object_handle, objects_cache)
+                # Calculate "resting_on" only for manipulable objects
+                placed_on = self._placed_on_GEMINI(object_handle, objects_cache)
 
-                obj_info["poggiato_su"] = poggiato_su
+                obj_info["placed_on"] = placed_on
                 world_state["environment_objects"]["manipulable_objects"].append(obj_info)
             else:
-                # Location statica
+                # Static location
                 world_state["environment_objects"]["static_locations"].append(obj_info)
 
         return world_state
 
     def get_world_state_data(self):
-        logger.debug("Costruzione del World State...")
+        logger.debug("Building World State...")
         identified_objects_handles = [self.ground_truth_objects.get(name) for name in self.identified_objects_names]
         return self._scan_scene_and_robot_state(identified_objects_handles)
 
@@ -192,69 +192,69 @@ class CoppeliaPerception:
             pil_image.save(f"scatto_simulatore_{self.no_images}.png")
             self.no_images += 1
         except Exception as e:
-            logger.exception(f"❌ Errore nell'acquisizione dell'immagine: {e}")
+            logger.exception(f"❌ Error acquiring image: {e}")
             return None
         return pil_image
 
     def get_grasp_pose(self, object_name):
         """
-        Calcola la posa di presa usando il Bounding Box (BB) per maggiore precisione.
+        Calculates the grasp pose using the Bounding Box (BB) for greater precision.
         """
         obj_handle = self.sim.getObject(f'/{object_name}')
         if not obj_handle: return None
 
         try:
-            # 1. Ottieni la posa base dell'oggetto (il suo pivot) rispetto alla base del robot
-            # Matrice 4x4 (appiattita a 12 elementi)
+            # 1. Get object base pose (its pivot) relative to robot base
+            # 4x4 Matrix (flattened to 12 elements)
             object_matrix = self.sim.getObjectMatrix(obj_handle, self.handles['base'])
 
-            # 2. Ottieni il Bounding Box (BB)
+            # 2. Get Bounding Box (BB)
             # size: [x_size, y_size, z_size]
-            # rel_pose: [x, y, z, qx, qy, qz, qw] posizione del centro del BB relativa al pivot dell'oggetto
+            # rel_pose: [x, y, z, qx, qy, qz, qw] BB center position relative to object pivot
             size, rel_pose = self.sim.getShapeBB(obj_handle)
 
-            object_height = size[2]  # La dimensione Z è l'altezza
+            object_height = size[2]  # Z dimension is height
 
-            # 3. Calcola il VERO CENTRO geometrico
-            # Spesso il pivot di un oggetto è alla base, ma noi vogliamo prendere il centro.
-            # getShapeBB ci dice dov'è il centro rispetto al pivot.
+            # 3. Calculate TRUE GEOMETRIC CENTER
+            # Often object pivot is at base, but we want the center.
+            # getShapeBB tells us where center is relative to pivot.
 
-            # Se l'oggetto è semplice, possiamo approssimare sommando l'offset Z relativo
-            # alla posizione Z della matrice dell'oggetto.
-            # Nota: Per una precisione assoluta servirebbe moltiplicare le matrici,
-            # ma per cubi e cilindri non ruotati, sommare l'offset locale alla Z globale è sufficiente.
+            # If object is simple, we can approximate by summing relative Z offset
+            # to object matrix Z position.
+            # Note: For absolute precision matrix multiplication is needed,
+            # but for non-rotated cubes and cylinders, summing local offset to global Z is sufficient.
 
             center_z_offset = rel_pose[2]
 
-            # --- DEFINIZIONE POSE ---
+            # --- POSE DEFINITION ---
 
-            # GRASP: Vogliamo che la pinza vada al centro geometrico dell'oggetto?
-            # O leggermente sopra?
+            # GRASP: Do we want gripper at object geometric center?
+            # Or slightly above?
             grasp_pose = list(object_matrix)
 
-            # Correzione altezza:
-            # Partiamo dalla Z del pivot (grasp_pose[11])
-            # Aggiungiamo l'offset per arrivare al centro geometrico (center_z_offset)
-            # Se vuoi prendere l'oggetto "dall'alto", potresti voler aggiungere ancora qualcosa (es. size[2]/2)
-            # Per ora, puntiamo al centro geometrico esatto:
+            # Height correction:
+            # Start from pivot Z (grasp_pose[11])
+            # Add offset to reach geometric center (center_z_offset)
+            # If you want to grab object "from above", might want to add something more (e.g. size[2]/2)
+            # For now, aim for exact geometric center:
             grasp_pose[11] += center_z_offset
 
-            # Afferriamo l'oggetto da "sopra"
+            # Grab object from "above"
             grasp_pose[11] += object_height/2.0 - ROBOT_FINGER_PAD_HEIGHT
 
             return grasp_pose
 
         except Exception as e:
-            logger.error(f"Errore calcolo pose per '{object_name}': {e}")
+            logger.error(f"Error calculating pose for '{object_name}': {e}")
             return None
 
     def get_place_pose(self, object_name, target_name):
         """
-        Calcola la posa esatta di rilascio (Place) affinché l'oggetto
-        sia appoggiato sopra il target (stacking).
+        Calculates the exact place pose so that the object
+        rests on top of the target (stacking).
 
-        La posa restituita corrisponde alla posizione che deve assumere il
-        Gripper Tip (assumendo che abbia afferrato l'oggetto al centro).
+        The returned pose corresponds to the position the Gripper Tip must assume
+        (assuming it grasped the object at the center).
         """
         obj_handle = self.sim.getObject(f'/{object_name}')
         target_handle = self.sim.getObject(f'/{target_name}')
@@ -263,49 +263,97 @@ class CoppeliaPerception:
             return None
 
         try:
-            # 1. Ottieni la posa del TARGET (es. il Pad) rispetto alla base del robot
-            # Questa matrice definisce X, Y e l'orientamento di base
+            # 1. Get TARGET pose (e.g., Pad) relative to robot base
+            # This matrix defines X, Y and base orientation
             target_matrix = self.sim.getObjectMatrix(target_handle, self.handles['base'])
 
-            # 2. Ottieni le dimensioni precise (Bounding Box)
-            # size: [x, y, z], pose: [x, y, z, qx, qy, qz, qw] (relativa al pivot)
+            # 2. Get precise dimensions (Bounding Box)
+            # size: [x, y, z], pose: [x, y, z, qx, qy, qz, qw] (relative to pivot)
             size_obj, pose_obj = self.sim.getShapeBB(obj_handle)
             size_tgt, pose_tgt = self.sim.getShapeBB(target_handle)
 
             obj_height = size_obj[2]
             tgt_height = size_tgt[2]
 
-            # 3. Calcolo della Z di "Stacking" (Impilamento)
-            # Vogliamo che: Fondo_Oggetto tocchi Cima_Target
+            # 3. Stacking Z Calculation
+            # We want: Object_Bottom touching Target_Top
             logger.debug(f"target_matrix_z: {target_matrix[11]}")
             logger.debug(f"pose_tgt: {pose_tgt[2]}")
             logger.debug(f"target_height: {tgt_height}")
-            # A. Trova la Z della superficie superiore del Target
-            # Z_pivot_target + Offset_Centro_BB + Metà_Altezza
+            # A. Find Z of Target top surface
+            # Z_pivot_target + Offset_Center_BB + Half_Height
             target_surface_z = target_matrix[11] + pose_tgt[2] + (tgt_height / 2.0)
             logger.debug(f"target_surface_z: {target_surface_z}")
 
-            # B. Trova dove deve stare il centro del Gripper/Oggetto
-            # Superficie_Target + Metà_Altezza_Oggetto
-            # (Assumiamo che la presa sia avvenuta al centro geometrico dell'oggetto)
+            # B. Find where Gripper/Object center must be
+            # Target_Surface + Half_Object_Height
+            # (Assuming grasp happened at geometric center of object)
             final_z = target_surface_z + (obj_height / 2.0)
 
-            # 4. Costruisci la matrice di Place
+            # 4. Construct Place matrix
             place_pose = list(target_matrix)
-            place_pose[11] = final_z + obj_height/2.0 - ROBOT_FINGER_PAD_HEIGHT # (TODO) Sincronizziamo con il punto di afferraggio
+            place_pose[11] = final_z + obj_height/2.0 - ROBOT_FINGER_PAD_HEIGHT # (TODO) Sync with grasp point
 
             time.sleep(4.0)
 
-            # Nota: Questo posizionerà l'oggetto al centro X,Y del target,
-            # con lo stesso orientamento del target.
+            # Note: This will position object at X,Y center of target,
+            # with same orientation as target.
 
-            # 5. Restituisci anche l'altezza dell'oggetto, utile per calcolare
-            # le distanze di sicurezza (pre-place, lift) nel chiamante.
+            # 5. Return object height too, useful for calculating
+            # safety distances (pre-place, lift) in caller.
             return place_pose, obj_height
 
         except Exception as e:
-            logger.error(f"Errore calcolo place pose per '{object_name}' su '{target_name}': {e}")
+            logger.error(f"Error calculating place pose for '{object_name}' on '{target_name}': {e}")
             return None, 0.0
+
+    def get_nudge_pose(self, object_name):
+        """
+        Calculates the grasp pose using the Bounding Box (BB) for greater precision.
+        """
+        obj_handle = self.sim.getObject(f'/{object_name}')
+        if not obj_handle: return None
+
+        try:
+            # 1. Get object base pose (its pivot) relative to robot base
+            # 4x4 Matrix (flattened to 12 elements)
+            object_matrix = self.sim.getObjectMatrix(obj_handle, self.handles['base'])
+
+            # 2. Get Bounding Box (BB)
+            # size: [x_size, y_size, z_size]
+            # rel_pose: [x, y, z, qx, qy, qz, qw] BB center position relative to object pivot
+            size, rel_pose = self.sim.getShapeBB(obj_handle)
+
+            object_height = size[2]  # Z dimension is height
+
+            # 3. Calculate TRUE GEOMETRIC CENTER
+            # Often object pivot is at base, but we want the center.
+            # getShapeBB tells us where center is relative to pivot.
+
+            # If object is simple, we can approximate by summing relative Z offset
+            # to object matrix Z position.
+            # Note: For absolute precision matrix multiplication is needed,
+            # but for non-rotated cubes and cylinders, summing local offset to global Z is sufficient.
+
+            center_z_offset = rel_pose[2]
+
+            # --- POSE DEFINITION ---
+
+            # GRASP: Do we want gripper at object geometric center?
+            # Or slightly above?
+            nudge_pose = list(object_matrix)
+
+            # Height correction:
+            # Start from pivot Z (grasp_pose[11])
+            # Add offset to reach geometric center (center_z_offset)
+            # If you want to grab object "from above", might want to add something more (e.g. size[2]/2)
+            # For now, aim for exact geometric center:
+            #nudge_pose[3] += 0.1
+            return nudge_pose
+
+        except Exception as e:
+            logger.error(f"Error calculating pose for '{object_name}': {e}")
+            return None
 
     def dist_xy(self, target_handle, ref_handle):
         target_pos = self.sim.getObjectPosition(target_handle)
@@ -340,37 +388,53 @@ class CoppeliaPerception:
             return True
         return False
 
-    def _poggiato_su_GEMINI(self, object_handle, objects_cache):
-        # Ottimizzazione: Cerca solo tra gli ALTRI oggetti nella cache che sono SOTTO questo
+    def _placed_on_GEMINI(self, object_handle, objects_cache):
+        """
+        Determines what an object is resting on by looking for the closest
+        vertical candidate among those below it.
+        """
         data = objects_cache[object_handle]
-        poggiato_su = "sconosciuto"
+
+        # Default: if nothing found below, assume it's on table
+        best_support_name = "table"
+
+        # Initialize min distance found with high value (e.g. max threshold)
+        # We are looking for object with smallest Z distance (closest underneath)
+        min_z_distance = 0.20  # Max vertical threshold (10cm)
+
         for potential_support_handle, support_data in objects_cache.items():
-            if object_handle == potential_support_handle: continue
+            if object_handle == potential_support_handle:
+                continue
 
             obj_z = data['pos'][2]
             supp_z = support_data['pos'][2]
 
-            # Definisci una soglia verticale e orizzontale
-            # Check veloce Z: l'oggetto deve essere sopra il supporto (es. entro 5cm)
-            if 0 < (obj_z - supp_z) < 0.10:
-                # Check distanza XY (sono sovrapposti?)
-                # Calcolo distanza planare semplice
+            # Calculate vertical gap
+            z_gap = obj_z - supp_z
+
+            # 1. Z Filter: Object must be ABOVE support (z_gap > 0)
+            # and must be WITHIN current threshold (or initial max)
+            if 0 < z_gap < min_z_distance:
+
+                # 2. XY Filter: Are they overlapping?
                 dist_xy = ((data['pos'][0] - support_data['pos'][0]) ** 2 +
                            (data['pos'][1] - support_data['pos'][1]) ** 2) ** 0.5
 
-                # Se sono vicini in XY (es. < 10cm), assumiamo contatto
-                # (Per una logica più precisa serve Bounding Box check)
+                # Horizontal threshold (e.g., 10-15cm depending on object size)
                 if dist_xy < 0.15:
-                    poggiato_su = support_data['name']
-                    break  # Trovato un supporto, fermati
+                    # FOUND A BETTER CANDIDATE
+                    # Do not break! Save this as new "best candidate"
+                    # and tighten z_gap threshold for next iterations.
+                    best_support_name = support_data['name']
+                    min_z_distance = z_gap
 
-        return poggiato_su
+        return best_support_name
 
-    def pick_and_hold_success_detector(self, object_name):
+    def pick_success_detector(self, object_name):
         object_handle = self.sim.getObject(f'/{object_name}')
 
         if self.dist(object_handle, self.handles['tip']) > 0.05:
-            return False, "Oggetto non afferrato"
+            return False, "Object not picked"
         return True, "True"
 
     def place_success_detector(self, object_name, target_name):
@@ -379,4 +443,4 @@ class CoppeliaPerception:
 
         if self.is_on(object_handle, target_handle):
             return True, "True"
-        return False, "Oggetto non lasciato su target"
+        return False, "Object not placed on target"

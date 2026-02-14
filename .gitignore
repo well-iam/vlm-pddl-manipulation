@@ -1,23 +1,24 @@
-# Ignora l'ambiente virtuale
+# Ignore virtual environment
+*.env
 venv/
 tesi_env/
 
-# Ignora i file compilati di Python
+# Ignore test folders
+grasp_test/
+dummy_tests/
+
+# Python compiled files
 __pycache__/
 *.pyc
 
-# Ignora la configurazione di PyCharm
+# Ignore PyCharm configuration
 .idea/
 
-# Ignora file generati o temporanei
-scatto_simulatore.png
+# Ignore temp or generated files
+*.png
 *.log
 
-# (Opzionale) Se le scene di CoppeliaSim sono enormi (>100MB),
-# potresti volerle ignorare, ma per ora salviamole.
-# *.ttt
-
-# Ignora gli artefatti di installazione
+# Ignore installation artifacts
 *.egg-info/
 dist/
 build/
