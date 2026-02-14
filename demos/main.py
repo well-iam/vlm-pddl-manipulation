@@ -2,12 +2,12 @@ import time
 import logging
 import sys
 from pathlib import Path
-from tesi_gemini_robotics import setup_logging
-from tesi_gemini_robotics import connect_to_sim
-from tesi_gemini_robotics import GeminiClient
-from tesi_gemini_robotics import TaskExecutor
-from tesi_gemini_robotics import system_instruction_dict
-from tesi_gemini_robotics.implementations.coppelia.coppeliasim_robot import CoppeliaSimRobot
+from vlm_agent import setup_logging
+from vlm_agent import connect_to_sim
+from vlm_agent import GeminiClient
+from vlm_agent import TaskExecutor
+from vlm_agent import system_instruction_dict
+from vlm_agent.implementations.coppelia.coppeliasim_robot import CoppeliaSimRobot
 
 logger = logging.getLogger(__name__)
 # Choose between: pddl, no_pddl_collaborative
@@ -20,7 +20,7 @@ def main():
     if SYSTEM_INSTRUCTION_NAME.startswith("pddl"):
         script_dir = Path(__file__).parent.resolve()
         # Read the content of the domain.pddl file
-        pddl_domain_path = script_dir.parent / "src" / "tesi_gemini_robotics" / "core" / "domain.pddl"
+        pddl_domain_path = script_dir.parent / "src" / "vlm_agent" / "core" / "domain.pddl"
         try:
             with open(pddl_domain_path, "r") as f:
                 pddl_domain_content = f.read()

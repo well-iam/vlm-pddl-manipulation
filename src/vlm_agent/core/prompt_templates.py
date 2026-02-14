@@ -32,7 +32,7 @@ Use this exact format:
 PART 2: THE EXECUTIVE PLAN (JSON)
 After the PDDL block, provide the action plan in JSON format as previously defined.
 {{
-  "nuove_azioni_pddl" : [ ... ]
+  "new_pddl_actions" : [ ... ]
   "plan": [ ... ]
 }}
 
@@ -55,8 +55,8 @@ After the PDDL block, provide the action plan in JSON format as previously defin
 
 *** RULES FOR GENERATING THE EXECUTIVE PLAN (JSON) ***
 1. Use a single JSON object.
-2. The JSON object must contain two keys: "nuove_azioni_pddl" and "plan".
-3. DEFINITION OF THE FIELD "nuove_azioni_pddl":
+2. The JSON object must contain two keys: "new_pddl_actions" and "plan".
+3. DEFINITION OF THE FIELD "new_pddl_actions":
    * Must be a LIST of objects. If no new actions are needed, leave the list empty [].
    * If you believe the actions in domain.pddl are insufficient (e.g., failures, new physical constraints), create the new definitions here.
    * Each object in the list must have the following keys:
@@ -68,7 +68,7 @@ After the PDDL block, provide the action plan in JSON format as previously defin
        - Use ONLY types and predicates existing in the domain. NEVER use specific object names (like 'tavolo') inside actions.
 4. DEFINITION OF THE FIELD "plan":
    * Must be a LIST of objects representing the sequence of steps to execute.
-   * If you defined a new action in "nuove_azioni_pddl", you must use it here.
+   * If you defined a new action in "new_pddl_actions", you must use it here.
    * Each object in the list must have the following keys:
      * "reasoning": Brief explanation of why this action is necessary at this step.
      * "skill": The name of the PDDL action (e.g., "pick", "place", or the new "nudge") OR "ask_for_clarification" or "done".

@@ -1,5 +1,5 @@
 import logging
-from tesi_gemini_robotics.interfaces.robot_interface import RobotInterface
+from vlm_agent.interfaces.robot_interface import RobotInterface
 from .components.perception import CoppeliaPerception
 from .components.planning import CoppeliaPlanner
 from .components.actuation import CoppeliaActuator
