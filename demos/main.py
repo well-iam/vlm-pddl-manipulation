@@ -8,7 +8,9 @@ from vlm_agent import GeminiClient
 from vlm_agent import TaskExecutor
 from vlm_agent import system_instruction_dict
 from vlm_agent.implementations.coppelia.coppeliasim_robot import CoppeliaSimRobot
+from dotenv import load_dotenv
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 # Choose between: pddl, no_pddl_collaborative
 SYSTEM_INSTRUCTION_NAME = "pddl_dynamic_actions"
