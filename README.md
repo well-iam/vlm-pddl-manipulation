@@ -1,39 +1,38 @@
-# A VLM-based Control Framework for Robotic Manipulation Tasks with Plan Verification
+# A VLM-based Control Framework for Robotic Manipulation with PDDL Verification
 
 [![ROS 2 Humble](https://img.shields.io/badge/ROS2-Humble-blue.svg)](https://docs.ros.org/en/humble/)
 [![Python 3.10](https://img.shields.io/badge/Python-3.10-yellow.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![YouTube](https://img.shields.io/badge/YouTube-Watch%20Full%20Demo-red?logo=youtube)](https://youtu.be/C8rL8y8n__4)
 
-> **Project for Master Thesis in AI & Cognitive Robotics** <br/>
-> *Implementation of a VLM-based high-level planner for long-horizon manipulation tasks using Franka Emika Research 3 (FR3).*
+> **Master Thesis in AI & Cognitive Robotics** <br/>
+> **University:** Università degli Studi di Napoli Federico II | **Lab:** PrismaLab <br/>
+> **Supervisor:** Prof. Alberto Finzi | **Author:** William Notaro
 
 ## 🎥 Demo
 
 **Task:** *"The kids have forgotten the toys on the table, clean them"* <br/>
-**Outcome:** The agent interprets the vague command, identifies objects via the Perception Server, and executes a multi-step cleanup using MoveIt.
-
+**Challenge:** The command is abstract ("clean") and requires long-horizon planning with multiple objects.
+> [!TIP]
+> **Check the Full Video Demo:** [YouTube Video](https://youtu.be/C8rL8y8n__4)
 <div align="center">
   <img src="https://github.com/well-iam/well-iam/blob/main/previews/vlm_control_framework.gif" alt="Robot Demo GIF" width="60%">
   <br>
-  <a href="https://youtu.be/C8rL8y8n__4">
-    <img src="https://img.youtube.com/vi/C8rL8y8n__4/0.jpg" alt="Watch full video" width="40%">
-  </a>
-  <br>
-  <em>(Click to watch the full experiment)</em>
+  <em>The agent interprets the vague command, verifies actions via PDDL, and executes a multi-step cleanup.</em>
 </div>
-
 
 ## 📖 Overview
 
-This repository hosts a modular framework for **Zero-Shot Robotic Manipulation** driven by Vision-Language Models (VLMs). The system bridges the gap between semantic reasoning (Gemini API) and low-level control (ROS 2 / MoveIt), enabling the robot to understand unstructured commands and interact with open-world objects.
+This repository hosts a modular framework for **Verifiable Zero-Shot Robotic Manipulation**. It addresses the hallucination and safety issues of Large Language Models (LLMs) by integrating them into a hybrid architecture.
+
+The system bridges the gap between semantic reasoning (Gemini API) and low-level control (ROS 2 / MoveIt) by using **PDDL (Planning Domain Definition Language)** as a logic filter. This ensures that the robot's generated plans are not only semantically coherent but also physically executable and safe.
 
 ### Key Features
-* **VLM-Centric Reasoning:** Utilizes a "Chain-of-Thought" prompting strategy (Inner Monologue) to decompose abstract commands into executable motion primitives.
-* **Perception-Action Loop:** real-time integration of RGB-D data (Intel RealSense) with joint-space control.
-* **Modular Architecture:**
-    * `perception_server`: Handles 3D object detection, pose estimation, and point cloud processing.
+* **🧠 Neuro-Symbolic Architecture:** Combines the creativity of VLMs (Chain-of-Thought reasoning) with the safety guarantees of symbolic planning (PDDL).
+* **🛡️ Plan Verification:** Automatically validates the VLM's output against a symbolic domain to prevent logical hallucinations or unsafe actions before execution.
+* **🧩 Modular Design:**
+    * `perception_server`: Handles 3D object detection and point cloud processing.
     * `vlm_agent`: Core logic module encapsulating the LLM interface and task planning.
-    * `real_franka_robot`: Hardware interface, motion planning (MoveIt), and action execution.
+    * `real_franka_robot`: Handles hardware, motion planning (MoveIt), and action execution.
 
 ## 🏗️ Architecture
 
@@ -41,13 +40,14 @@ The system follows a modular ROS 2 design:
 
 | Package | Type | Description |
 | :--- | :--- | :--- |
-| **`real_franka_robot`** | Control & Logic | Orchestrates the **Inner Monologue** node (LLM reasoning), maintains the TF tree, and interfaces with MoveIt for trajectory execution. |
-| **`perception_server`** | Service Node | A dedicated ROS service that processes point clouds (from `realsense-ros`) to provide 3D object poses and scene semantics upon request. |
-| **`vlm_agent`** | Library | Embedded Python module for Chain-of-Thought reasoning and Gemini API interaction. |
+| **`real_franka_robot`** | Control & Logic | Orchestrates the main node, maintains the TF tree, and interfaces with MoveIt for execution. |
+| **`perception_server`** | Service Node | Processes point clouds (RealSense) to provide 3D object poses and scene semantics. |
+| **`vlm_agent`** | Library | **Core Intelligence.** Handles prompt engineering, PDDL state generation, and plan validation. |
 
-**External Dependencies:**
-* `franka_ros2` (Hardware drivers)
-* `realsense-ros` (Camera drivers)
+**External Dependencies:** 
+ * `franka_ros2` (Hardware)
+ * `realsense-ros` (Vision)
+ * `google-generativeai` (Reasoning)
 
 ## 🚀 Installation & Usage
 
@@ -76,7 +76,7 @@ To allow for granular control and real-time debugging of each subsystem, the fra
 **1. Robot Hardware (High Priority)**:
 Initializes the FR3 drivers and MoveIt planning pipeline.
 ```bash
-launch franka_fr3_moveit_config fr3_moveit.launch.py robot_ip:=<robot-ip>
+ros2 launch franka_fr3_moveit_config fr3_moveit.launch.py robot_ip:=<robot-ip>
 ```
 **2. Vision Drivers**
 Starts the Intel RealSense camera stream.
@@ -84,7 +84,7 @@ Starts the Intel RealSense camera stream.
 ros2 launch realsense2_camera rs_launch.py clip_distance:=1.0 config_file:=$(ros2 pkg prefix real_franka_robot)/config/realsense_manipulation.yaml
 ```
 **3. Static Transforms**
-Publishes the calibrated camera-to-robot transform.
+Publishes the calibrated camera-to-robot TF.
 ```bash
 ros2 realsense_to_robot_static_transform.launch.py
 ```
@@ -107,8 +107,7 @@ Note: For manual interventions (e.g., error recovery or controller switching), a
 - Compute: Workstation with Real-Time Kernel patch.
 
 ## 📐 Sensor Calibration (Eye-to-hand)
-
-To replicate the pick-and-place accuracy, an accurate extrinsic calibration between the camera (RealSense) and the robot base (FR3) is required.
+To ensure sub-centimeter pick-and-place accuracy, precise extrinsic calibration is performed.
 
 ### Calibration Target
 The system uses a **ChArUco Board** with the following specifications:
@@ -151,5 +150,5 @@ The extrinsic calibration routine is based on the [MoveIt's Hand-Eye calibration
         `launch/static_transform_publisher.launch.py`
 
 # 🧪 Experiments & Sim-to-Real
-This branch (main) contains the Real World deployment code.
-For the simulation environment (CoppeliaSim) please refer to the `dev` branch.
+- `main` branch: Real World deployment code (FR3 Hardware).
+- `dev` branch: Simulation environment (CoppeliaSim) and experimental baselines.
