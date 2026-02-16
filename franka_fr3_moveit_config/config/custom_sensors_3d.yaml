@@ -1,0 +1,17 @@
+# Name list (VECTOR<STRING> is a native parameter and supported by ROS2)
+# Differently from VECTOR<UNKNOWN> (which is obtained putting the parameters directly, without specifying the sensor name)
+# For better understanding, compare with fr3_controllers.yaml
+sensors:
+  - realsense_d435
+
+realsense_d435:
+  sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+  point_cloud_topic: /camera/camera/depth/color/points
+  max_range: 2.0                             # Ignore points farther than 2 meters (noise)
+  point_subsample: 1                         # 1=Use on all points. Increase if CPU suffers.
+  padding_offset: 0.05                       # Inflate obstacles of 5cm (safety)
+  padding_scale: 2.0
+  max_update_rate: 1.0                       # Map update frequency (Hz)
+  filtered_cloud_topic: filtered_cloud
+
+octomap_resolution: 0.005

@@ -1,0 +1,41 @@
+clip_distance: 0.95
+
+# RGB Config
+enable_color: true
+rgb_camera.color_profile: '640x480x6'
+rgb_camera.color_format: 'RGB8'
+rgb_camera.power_line_frequency: 1      # 0: Disabled, 1: 50Hz (Europe), 2: 60Hz (America), 3: Auto
+rgb_camera.sharpness: 100
+
+# RGB Exposition (Manual)
+rgb_camera.enable_auto_exposure: false
+rgb_camera.exposure: 350
+rgb_camera.gain: 64
+    
+# Depth config (3D PointCloud)
+enable_depth: true
+depth_module.depth_format: 'Z16'
+depth_module.depth_profile: '848x480x6'
+depth_module.infra_profile: '848x480x6'
+    
+# Depth Exposition (Manual)
+depth_module.enable_auto_exposure: false
+depth_module.exposure: 2500
+depth_module.gain: 16
+    
+# Preset and Laser
+depth_module.visual_preset: 3    # 3 = High Accuracy
+depth_module.emitter_enabled: 1
+depth_module.laser_power: 360.0    # Max (=360) power to improve object detection
+    
+# Post-processing filters (for cleaning the point cloud)
+align_depth.enable: true         # Align Depth to RGB
+spatial_filter.enable: true
+spatial_filter.holes_fill: 2
+temporal_filter.enable: true     # Stabilize image in time
+hole_filling_filter.enable: false  # OFF is better for more precise pick & place
+    
+# OUTPUT
+pointcloud.enable: true
+pointcloud.stream_filter: 2
+enable_sync: true                # Synchronize the messages

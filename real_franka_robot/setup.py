@@ -34,7 +34,7 @@ setup(
     entry_points={
         'console_scripts': [
 	        # command_name = package.file:function
-            'inner_monologue = real_franka_robot.inner_monologue:main',
+            'main = real_franka_robot.main:main',
         ],
     },
 )

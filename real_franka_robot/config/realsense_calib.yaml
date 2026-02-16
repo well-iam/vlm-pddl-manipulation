@@ -1,0 +1,15 @@
+# RGB Config
+enable_color: true
+rgb_camera.color_profile: '1920x1080x30'
+rgb_camera.color_format: 'RGB8'
+rgb_camera.power_line_frequency: 1      # 0: Disabled, 1: 50Hz (Europe), 2: 60Hz (America), 3: Auto
+
+# RGB Exposition (Manual)
+rgb_camera.enable_auto_exposure: false
+rgb_camera.exposure: 150
+rgb_camera.gain: 64
+    
+# Depth and Laser Configuration
+enable_depth: false
+depth_module.emitter_enabled: 0
+enable_sync: false
