@@ -23,7 +23,7 @@ We introduce a VLM-based agent capable of interpreting unstructured, long-horizo
 > [!TIP]
 > **Check the Full Video Demo:** [YouTube Video](https://youtu.be/C8rL8y8n__4)
 <div align="center">
-  <img src="https://github.com/well-iam/well-iam/blob/main/previews/vlm_control_framework.gif" alt="Robot Demo GIF" width="60%">
+  <img src="https://github.com/well-iam/well-iam/blob/main/previews/vlm_control_framework.gif" alt="Robot Demo GIF" width="80%">
   <br>
   <em>The agent interprets the vague command, verifies actions via PDDL, and executes a multi-step cleanup.</em>
 </div>
