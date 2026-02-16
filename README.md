@@ -1,101 +1,155 @@
-Comandi per terminali
+# A VLM-based Control Framework for Robotic Manipulation Tasks with Plan Verification
 
-1 | 2
------
-3 | 5
-4
+[![ROS 2 Humble](https://img.shields.io/badge/ROS2-Humble-blue.svg)](https://docs.ros.org/en/humble/)
+[![Python 3.10](https://img.shields.io/badge/Python-3.10-yellow.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-6
+> **Project for Master Thesis in AI & Cognitive Robotics** <br/>
+> *Implementation of a VLM-based high-level planner for long-horizon manipulation tasks using Franka Emika Research 3 (FR3).*
 
-TERMINALE 1:
-ros2 launch franka_fr3_moveit_config MIO_moveit.launch.py robot_ip:=192.168.9.12
-ros2 launch franka_bringup franka.launch.py robot_ip:=192.168.9.12
+## 🎥 Demo
 
-Se vuoi lanciare con fake-hardware:
-ros2 launch franka_fr3_moveit_config MIO_moveit.launch.py robot_ip:=dont-care use_fake_hardware:=true
+**Task:** *"The kids have forgotten the toys on the table, clean them"* <br/>
+**Outcome:** The agent interprets the vague command, identifies objects via the Perception Server, and executes a multi-step cleanup using MoveIt.
 
-Se vuoi lanciare ad elevata priorita:
-sudo bash -c "source /opt/ros/humble/setup.bash && source /home/hargalaten/franka_ros2_ws/install/setup.bash && chrt -f 85 ros2 launch franka_fr3_moveit_config MIO_moveit.launch.py robot_ip:=192.168.9.12"
+<div align="center">
+  <img src="https://github.com/well-iam/well-iam/blob/main/previews/vlm_control_framework.gif" alt="Robot Demo GIF" width="60%">
+  <br>
+  <a href="https://youtu.be/C8rL8y8n__4">
+    <img src="https://img.youtube.com/vi/C8rL8y8n__4/0.jpg" alt="Watch full video" width="40%">
+  </a>
+  <br>
+  <em>(Click to watch the full experiment)</em>
+</div>
 
------------------------------------------------------
 
-TERMINALE 2:
-ros2 launch realsense2_camera rs_launch.py clip_distance:=1.0 config_file:=/home/hargalaten/Desktop/MIO_realsense_pickplace.yaml
+## 📖 Overview
 
-Per calibrazione:
-ros2 launch realsense2_camera rs_launch.py clip_distance:=1.0 config_file:=/home/hargalaten/Desktop/MIO_realsense_calib.yaml
+This repository hosts a modular framework for **Zero-Shot Robotic Manipulation** driven by Vision-Language Models (VLMs). The system bridges the gap between semantic reasoning (Gemini API) and low-level control (ROS 2 / MoveIt), enabling the robot to understand unstructured commands and interact with open-world objects.
 
------------------------------------------------------
+### Key Features
+* **VLM-Centric Reasoning:** Utilizes a "Chain-of-Thought" prompting strategy (Inner Monologue) to decompose abstract commands into executable motion primitives.
+* **Perception-Action Loop:** real-time integration of RGB-D data (Intel RealSense) with joint-space control.
+* **Modular Architecture:**
+    * `perception_server`: Handles 3D object detection, pose estimation, and point cloud processing.
+    * `vlm_agent`: Core logic module encapsulating the LLM interface and task planning.
+    * `real_franka_robot`: Hardware interface, motion planning (MoveIt), and action execution.
 
-TERMINALE 3:
-ros2 launch real_franka_robot MIO_static_transform_publisher.launch.py
+## 🏗️ Architecture
 
------------------------------------------------------
+The system follows a modular ROS 2 design:
 
-TERMINALE 4:
-PER PASSARE A GRAVITY_COMPENSATION: 
-ros2 service call /controller_manager/switch_controller controller_manager_msgs/srv/SwitchController "{start_controllers: ['gravity_compensation_example_controller'], stop_controllers: ['fr3_arm_controller'], strictness: 2, start_asap: 2}"
+| Package | Type | Description |
+| :--- | :--- | :--- |
+| **`real_franka_robot`** | Control & Logic | Orchestrates the **Inner Monologue** node (LLM reasoning), maintains the TF tree, and interfaces with MoveIt for trajectory execution. |
+| **`perception_server`** | Service Node | A dedicated ROS service that processes point clouds (from `realsense-ros`) to provide 3D object poses and scene semantics upon request. |
+| **`vlm_agent`** | Library | Embedded Python module for Chain-of-Thought reasoning and Gemini API interaction. |
 
-PER RITORNARE A FR3_CONTROLLER: 
-ros2 service call /controller_manager/switch_controller controller_manager_msgs/srv/SwitchController "{start_controllers: ['fr3_arm_controller'], stop_controllers: ['gravity_compensation_example_controller'], strictness: 2, start_asap: true}"
+**External Dependencies:**
+* `franka_ros2` (Hardware drivers)
+* `realsense-ros` (Camera drivers)
 
-PER RESETTARE UN ERRORE REFLEX:
-ros2 action send_goal /action_server/error_recovery franka_msgs/action/ErrorRecovery "{}"
+## 🚀 Installation & Usage
 
-PER RESETTARE LA OCTOMAP:
-ros2 service call /clear_octomap std_srvs/srv/Empty {}
+### Prerequisites
+* Ubuntu 22.04 LTS
+* ROS 2 Humble
+* Intel RealSense SDK 2.0
+* `libfranka` & `franka_ros2`
 
------------------------------------------------------------
+### Setup
+```bash
+# Clone the repository
+git clone https://github.com/well-iam/vlm-pddl-manipulation.git
+cd vlm-pddl-manipulation
+```
 
-Terminale 5:
-export GEMINI_API_KEY=...
-ros2 run real_franka_robot inner_monologue
+### Install dependencies
+`rosdep install --from-paths src --ignore-src -r -y`
 
------------------------------------------------------------
+### Build the workspace
+`colcon build --symlink-install`
 
-Terminale 6:
+# 🚀 Running the System (Modular Execution)
+To allow for granular control and real-time debugging of each subsystem, the framework is launched across distinct terminals.
+
+**1. Robot Hardware (High Priority)**:
+Initializes the FR3 drivers and MoveIt planning pipeline.
+```bash
+launch franka_fr3_moveit_config fr3_moveit.launch.py robot_ip:=<robot-ip>
+```
+**2. Vision Drivers**
+Starts the Intel RealSense camera stream.
+```bash
+ros2 launch realsense2_camera rs_launch.py clip_distance:=1.0 config_file:=$(ros2 pkg prefix real_franka_robot)/config/realsense_manipulation.yaml
+```
+**3. Static Transforms**
+Publishes the calibrated camera-to-robot transform.
+```bash
+ros2 realsense_to_robot_static_transform.launch.py
+```
+**4. Perception Service**
+Starts the object detection server.
+```bash
 ros2 launch perception_server get_scene_objects.launch.py
+```
+**5. Main Agent**
+Runs the VLM reasoning loop. Ensure your API key is set.
+```bash
+export GEMINI_API_KEY="your_api_key"
+ros2 run real_franka_robot main
+```
+Note: For manual interventions (e.g., error recovery or controller switching), a separate terminal is recommended for service calls.
 
------------------------------------------------------
+# 🛠️ Hardware Setup
+- Manipulator: Franka Emika Research 3 (FR3).
+- Vision: Intel RealSense D435i (Eye-to-hand / Fixed configuration).
+- Compute: Workstation with Real-Time Kernel patch.
 
-Verificare la qualità della comunicazione:
-ros2 topic echo /franka_robot_state_broadcaster/franka_states --field control_command_success_rate
+## 📐 Sensor Calibration (Eye-to-hand)
 
-Per leggere il QoS dei topic:
-ros2 topic info /camera/camera/depth/color/points --verbose
+To replicate the pick-and-place accuracy, an accurate extrinsic calibration between the camera (RealSense) and the robot base (FR3) is required.
 
-ChArUco:
-Squares,X,Y: 5x5
-Marker size: 50 px
-Square size: 80 px
-margin size: 10 px
-marker border: 1 bits 
-DICT 4x4
-0.133 m (board length)
-0.0167 m (measured marker size)
+### Calibration Target
+The system uses a **ChArUco Board** with the following specifications:
+* **Layout:** 5x5 Squares
+* **Marker Size:** 50 px
+* **Square Size:** 80 px
+* **Margin Size:** 10 px
+* **Marker Border:** 1 bits
+* **Dictionary:** DICT_4X4_50
 
-Chiudi gripper:
-ros2 action send_goal -f /franka_gripper/grasp franka_msgs/action/Grasp "{width: 0.00, speed: 0.03, force: 0.1, epsilon: {inner: 0.01, outer: 0.01}}"
-ros2 action send_goal -f /franka_gripper/move franka_msgs/action/Move "{width: 0.08, speed: 0.03}"
+### Procedure
+The extrinsic calibration routine is based on the [MoveIt's Hand-Eye calibration plugin](https://github.com/moveit/moveit_calibration).
 
-PROCEDURA CALIBRAZIONE
-Preparare il robot:
-1. Spegni tutto
-2. Smonta e-e
-3. Accendi
-4. IMPORTANTE: Cambia profilo e-e: Desk>Settings>End Effector>Attiva "Migrated Profile"
-5. Avvia moveit_launch mettendo nel launchfile MIO_calib.rviz come configurazione
-6. Settare i parametri sul plugin moveit
-7. Calibrare
-8. Generare il file launch da cui prendere i dati
-9. Copiare i dati nello script camera_transform (in RealRobotFranka>calibration) ed eseguire.
-10. Copiare i dati nel MIO_static_transform (in RealRobotFranka>launch)
-11. Spegni tutto
-12. Rimonta e-e
-13. IMPORTANTE: Ricorda di cambiare profilo in quello del Franka Hand
+1.  **Preparation:**
+    * Dismount the Franka Hand (gripper).
+    * Mount the ChArUco board rigidly in the workspace.
+    * Switch the robot controller to "Migrated Profile" (Desk > Settings > End-Effector).
 
-Avviare launch moveit_config cambiando la configurazione
+2.  **Launch Calibration Node:**
+    Run the camera driver with calibration settings:
+    ```bash
+    ros2 launch realsense2_camera rs_launch.py config_file:=$(ros2 pkg prefix real_franka_robot)/config/realsense_calib.yaml
+    ```
 
+3.  **Execute MoveIt Calibration:**
+    Launch the specialized RViz configuration for calibration:
+    ```bash
+    ros2 launch franka_fr3_moveit_config fr3_moveit.launch.py rviz_config:=calib.rviz
+    ```
+    *Follow the MoveIt GUI instructions to collect samples across different poses.*
 
-PROMPT DEMO: 
-The kids have forgotten the toys on the table, clean them
+4.  **Process & Apply Transform:**
+    The MoveIt solver outputs the transform relative to the `camera_optical_frame`. To align this with the URDF physical model (`camera_link`), a frame conversion is required.
+    
+    * Write the solver outputs in helper script and run it:
+        ```bash
+        python3 src/real_franka_robot/calibration/camera_transform.py
+        ```
+    * Copy the corrected Translation and Quaternion values into:
+        `launch/static_transform_publisher.launch.py`
+
+# 🧪 Experiments & Sim-to-Real
+This branch (main) contains the Real World deployment code.
+For the simulation environment (CoppeliaSim) please refer to the `dev` branch.
