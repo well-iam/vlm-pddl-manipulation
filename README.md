@@ -8,6 +8,14 @@
 > **University:** Università degli Studi di Napoli Federico II | **Lab:** PrismaLab <br/>
 > **Supervisor:** Prof. Alberto Finzi | **Author:** William Notaro
 
+## 📝 Abstract
+
+Vision-Language Models (VLMs) have demonstrated impressive capabilities in high-level reasoning for robotic tasks. However, their deployment in real-world manipulation is often hindered by hallucinations, lack of physical grounding, and the generation of unsafe or geometrically infeasible plans. This thesis presents a hybrid neuro-symbolic framework for zero-shot robotic manipulation that bridges the gap between semantic reasoning and low-level control.
+
+We introduce a VLM-based agent capable of interpreting unstructured, long-horizon commands (e.g., "clean the table") via a Chain-of-Thought. Crucially, to ensure reliability, we integrate a PDDL (Planning Domain Definition Language) verification layer. This acts as a logic filter, validating the VLM-generated actions against a symbolic world state before execution. The system is implemented on a Franka Emika Research 3 (FR3) robot, demonstrating the feasibility of using symbolic planning to ground generative models in physical constraints, providing a safeguard against hallucinations in open-world pick-and-place tasks.
+
+---
+
 ## 🎥 Demo
 
 **Task:** *"The kids have forgotten the toys on the table, clean them"* <br/>
@@ -19,12 +27,6 @@
   <br>
   <em>The agent interprets the vague command, verifies actions via PDDL, and executes a multi-step cleanup.</em>
 </div>
-
-## 📖 Overview
-
-This repository hosts a modular framework for **Verifiable Zero-Shot Robotic Manipulation**. It addresses the hallucination and safety issues of Large Language Models (LLMs) by integrating them into a hybrid architecture.
-
-The system bridges the gap between semantic reasoning (Gemini API) and low-level control (ROS 2 / MoveIt) by using **PDDL (Planning Domain Definition Language)** as a logic filter. This ensures that the robot's generated plans are not only semantically coherent but also physically executable and safe.
 
 ### Key Features
 * **🧠 Neuro-Symbolic Architecture:** Combines the creativity of VLMs (Chain-of-Thought reasoning) with the safety guarantees of symbolic planning (PDDL).
@@ -49,7 +51,7 @@ The system follows a modular ROS 2 design:
  * `realsense-ros` (Vision)
  * `google-generativeai` (Reasoning)
 
-## 🚀 Installation & Usage
+## 🛠️ Installation & Usage
 
 ### Prerequisites
 * Ubuntu 22.04 LTS
@@ -65,12 +67,16 @@ cd vlm-pddl-manipulation
 ```
 
 ### Install dependencies
-`rosdep install --from-paths src --ignore-src -r -y`
+```bash
+rosdep install --from-paths src --ignore-src -r -y
+```
 
 ### Build the workspace
-`colcon build --symlink-install`
+```bash
+colcon build --symlink-install
+```
 
-# 🚀 Running the System (Modular Execution)
+## 🚀 Running the System (Modular Execution)
 To allow for granular control and real-time debugging of each subsystem, the framework is launched across distinct terminals.
 
 **1. Robot Hardware (High Priority)**:
@@ -101,10 +107,10 @@ ros2 run real_franka_robot main
 ```
 Note: For manual interventions (e.g., error recovery or controller switching), a separate terminal is recommended for service calls.
 
-# 🛠️ Hardware Setup
-- Manipulator: Franka Emika Research 3 (FR3).
-- Vision: Intel RealSense D435i (Eye-to-hand / Fixed configuration).
-- Compute: Workstation with Real-Time Kernel patch.
+## 🛠️ Hardware Setup
+- **Manipulator:** Franka Emika Research 3 (FR3).
+- **Vision:** Intel RealSense D435i (Eye-to-hand / Fixed configuration).
+- **Compute:** Workstation with Real-Time Kernel patch.
 
 ## 📐 Sensor Calibration (Eye-to-hand)
 To ensure sub-centimeter pick-and-place accuracy, precise extrinsic calibration is performed.
@@ -149,6 +155,6 @@ The extrinsic calibration routine is based on the [MoveIt's Hand-Eye calibration
     * Copy the corrected Translation and Quaternion values into:
         `launch/static_transform_publisher.launch.py`
 
-# 🧪 Experiments & Sim-to-Real
+## 🧪 Experiments & Sim-to-Real
 - `main` branch: Real World deployment code (FR3 Hardware).
 - `dev` branch: Simulation environment (CoppeliaSim) and experimental baselines.
