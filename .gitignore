@@ -1,0 +1,19 @@
+*.env
+
+# Python compiled files
+__pycache__/
+*.pyc
+
+# Ignore PyCharm configuration
+.idea/
+
+# Ignore temp or generated files
+*.png
+*.log
+
+# Ignore installation artifacts
+*.egg-info/
+log/
+dist/
+build/
+install/

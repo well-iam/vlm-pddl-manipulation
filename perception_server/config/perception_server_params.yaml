@@ -1,0 +1,54 @@
+/get_scene_objects_server:
+  ros__parameters:
+    # Topic Input
+    point_cloud_topic: "/camera/camera/depth/color/points"
+    rgb_image_topic: "/camera/camera/color/image_raw"
+    target_frame: "fr3_link0"
+    
+    # Debug Output
+    output_directory: "/tmp/"
+    debug_pcd_filename: "debug_perception.pcd"
+
+    # Support surface name
+    support_surface_name: "table"
+
+    # --- CROPPING ---
+    enable_cropping: true
+    crop_min_x: 0.10
+    crop_max_x: 0.70
+    crop_min_y: 0.00
+    crop_max_y: 0.50
+    crop_min_z: -0.03 
+    crop_max_z: 0.20
+    
+    # --- Segmentation ---
+    # Max height wrt robot at which the table can be
+    z_tolerance: 0.03
+    # 2cm threshold for ignoring metal tracks
+    plane_segmentation_threshold: 0.01
+    plane_segmentation_distance_threshold: 0.01
+    min_cluster_size: 80
+
+    # Parameters for speeding up the algorithm
+    #num_iterations: 2
+    #ransac_max_iterations: 400
+    ransac_distance_threshold: 0.015       # How much can the line/circle be imprecise?
+    #hough_center_bins: 25
+    #hough_radius_bins: 25
+
+    # Object recognition
+    # How many points do I need for saying "I have found a shape (box or cylinder)"?
+    inlier_threshold: 15
+    cluster_tolerance: 0.015
+
+    # Parameters for line filtering
+    line_min_cluster_size: 5      # Accept small segments
+    line_cluster_tolerance: 0.05    # Distance between clusters for being considered one cluster
+    line_curvature_threshold: 0.003 # Default: 0.0011
+
+    # Parameters for cirle filtering
+    circle_min_cluster_size: 10
+    circle_radius_tolerance: 0.05
+
+    # Voxel Filter Parameters:
+    voxel_leaf_size: 0.005
