@@ -12,7 +12,7 @@
 
 Vision-Language Models (VLMs) have demonstrated impressive capabilities in high-level reasoning for robotic tasks. However, their deployment in real-world manipulation is often hindered by hallucinations, lack of physical grounding, and the generation of unsafe or geometrically infeasible plans. This thesis presents a hybrid neuro-symbolic framework for zero-shot robotic manipulation that bridges the gap between semantic reasoning and low-level control.
 
-We introduce a VLM-based agent capable of interpreting unstructured, long-horizon commands (e.g., "clean the table") via a Chain-of-Thought. Crucially, to ensure reliability, we integrate a PDDL (Planning Domain Definition Language) verification layer. This acts as a logic filter, validating the VLM-generated actions against a symbolic world state before execution. The system is implemented on a Franka Emika Research 3 (FR3) robot, demonstrating the feasibility of using symbolic planning to ground generative models in physical constraints, providing a safeguard against hallucinations in open-world pick-and-place tasks.
+We introduce a VLM-based agent capable of interpreting unstructured, long-horizon commands (e.g., "clean the table") via a Chain-of-Thought. Crucially, to ensure reliability, we integrate a PDDL (Planning Domain Definition Language) verification layer. This acts as a logic filter, validating the VLM-generated actions against a symbolic world state before execution. The system is implemented on a Franka Emika Research 3 (FR3) robot, demonstrating the feasibility of using symbolic planning to ground generative models in physical constraints, providing a safeguard against hallucinations in open-world manipulation tasks.
 
 ---
 
