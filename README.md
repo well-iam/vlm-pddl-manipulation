@@ -29,7 +29,7 @@ The system is tested in a simulated environment using **CoppeliaSim** and a Fran
 
 ### 2. Clone the Repository
 ```bash
-git clone [https://github.com/well-iam/vlm-pddl-manipulation.git](https://github.com/well-iam/vlm-pddl-manipulation.git)
+git clone -b dev https://github.com/well-iam/vlm-pddl-manipulation.git
 cd vlm-pddl-manipulation
 ```
 
